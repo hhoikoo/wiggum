@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.14
+      - run: uv sync
+      - name: ruff check
+        run: uv run ruff check src/ tests/
+      - name: ruff format --check
+        run: uv run ruff format --check src/ tests/
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    needs: [changes, lint]
+    if: |
+      !cancelled() &&
+      needs.lint.result == 'success' &&
+      needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.14
+      - run: uv sync
+      - run: uv run pyright
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [changes, lint]
+    if: |
+      !cancelled() &&
+      needs.lint.result == 'success' &&
+      needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.14
+      - run: uv sync
+      - name: Run tests with coverage
+        run: |
+          rc=0
+          uv run pytest --cov --cov-report=term-missing -x || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "No tests collected -- treating as pass"
+            exit 0
+          fi
+          exit "$rc"
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [changes, lint, typecheck, test]
+    if: always()
+    steps:
+      - name: Check CI status
+        run: |
+          if [[ "${{ needs.changes.outputs.code }}" == "false" ]]; then
+            echo "No code changes, skipping code checks"
+            exit 0
+          fi
+
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "Lint failed: ${{ needs.lint.result }}"
+            exit 1
+          fi
+
+          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
+            echo "Type check failed: ${{ needs.typecheck.result }}"
+            exit 1
+          fi
+
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Tests failed: ${{ needs.test.result }}"
+            exit 1
+          fi
+
+          echo "All checks passed"
