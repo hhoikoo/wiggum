@@ -1,7 +1,6 @@
 ---
 name: codebase-researcher
 description: Read-only agent that researches a specific aspect of the codebase. Sonnet-powered for efficient parallel exploration.
-model: sonnet
 tools:
   - Glob
   - Grep

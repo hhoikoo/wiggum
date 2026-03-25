@@ -1,7 +1,6 @@
 ---
 name: web-researcher
 description: Read-only agent that researches a specific topic online. Sonnet-powered for efficient parallel research.
-model: sonnet
 tools:
   - WebSearch
   - WebFetch
