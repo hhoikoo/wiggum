@@ -1,0 +1,32 @@
+name: Story
+description: Non-trivial feature that warrants design discussion but is self-contained (single PR).
+labels: ["type:story"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is this story about?
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Detailed explanation of the work, context, and motivation.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Clear, testable criteria for what "done" looks like.
+    validations:
+      required: true
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: Technical Notes
+      description: Affected modules, implementation hints, dependencies, edge cases.
+    validations:
+      required: false
