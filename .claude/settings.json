@@ -1,0 +1,17 @@
+{
+    "respectGitignore": true,
+    "attribution": {
+        "commit": "",
+        "pr": ""
+    },
+    "includeCoAuthoredBy": false,
+    "permissions": {
+        "deny": [
+            "Read(.env)",
+            "Read(.env.*)",
+            "Write(.env)",
+            "Write(.env.*)"
+        ],
+        "defaultMode": "acceptEdits"
+    }
+}
