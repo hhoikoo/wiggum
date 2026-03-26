@@ -9,12 +9,12 @@ from wiggum.plan import Plan, PlanItem, append_todo, count_unchecked, parse_plan
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from wiggum.agent import AgentPort
+    from wiggum.agent import AgentService
     from wiggum.config import WiggumConfig
-    from wiggum.git import GitPort
+    from wiggum.git import GitClient
 
 
-def verify_checked(*, plan: Plan, agent: AgentPort) -> list[PlanItem]:
+def verify_checked(*, plan: Plan, agent: AgentService) -> list[PlanItem]:
     """Confirm [x] items are truly implemented via agent."""
     checked = [
         item for section in plan.sections for item in section.items if item.checked
@@ -43,7 +43,7 @@ def _render_plan(plan: Plan) -> str:
     return "\n".join(lines)
 
 
-def reorganize_findings(*, text: str, agent: AgentPort) -> str:
+def reorganize_findings(*, text: str, agent: AgentService) -> str:
     """Relocate Additional Findings items to proper sections via agent."""
     plan = parse_plan(text)
     findings_sections = [s for s in plan.sections if s.title == "Additional Findings"]
@@ -87,7 +87,7 @@ def reorganize_findings(*, text: str, agent: AgentPort) -> str:
     return _render_plan(Plan(title=plan.title, sections=new_sections))
 
 
-def find_gaps(*, plan_text: str, agent: AgentPort) -> list[str]:
+def find_gaps(*, plan_text: str, agent: AgentService) -> list[str]:
     """Identify missing plan items via agent."""
     result = agent.run(
         prompt=(
@@ -103,8 +103,8 @@ def find_gaps(*, plan_text: str, agent: AgentPort) -> list[str]:
 def outer_loop(
     *,
     plan_path: Path,
-    agent: AgentPort,
-    git: GitPort,
+    agent: AgentService,
+    git: GitClient,
     config: WiggumConfig,
 ) -> None:
     """Orchestrate verify, gaps, reorganize, and inner_loop batches."""

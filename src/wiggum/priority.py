@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from wiggum.agent import AgentPort
+    from wiggum.agent import AgentService
     from wiggum.plan import PlanItem
 
 _NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+(.+)$", re.MULTILINE)
@@ -17,7 +17,7 @@ _SYSTEM_PROMPT = "You are a dependency-order planner. Given a list of tasks, ret
 def select_items(
     *,
     items: Sequence[PlanItem],
-    agent: AgentPort,
+    agent: AgentService,
     count: int,
 ) -> list[PlanItem]:
     """Pick top N items by dependency order using an agent."""

@@ -11,7 +11,7 @@ from wiggum.git.models import LogEntry, StatusEntry
 _RECORD_SEP = "---RECORD---"
 
 
-class ShellGitAdapter:
+class SubprocessGit:
     """Git operations via subprocess calls."""
 
     def __init__(self, *, repo_path: Path) -> None:
@@ -98,3 +98,6 @@ class ShellGitAdapter:
     def commit(self, message: str) -> None:
         """Create a commit with the given message."""
         self._run("commit", "-m", message)
+
+
+ShellGitAdapter = SubprocessGit

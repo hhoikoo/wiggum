@@ -6,19 +6,28 @@ from typing import TYPE_CHECKING
 from wiggum.agent import AgentResult
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 
-class ShellAgentAdapter:
-    """AgentPort implementation that delegates to the claude CLI."""
+class SubprocessAgent:
+    """AgentService implementation that delegates to the claude CLI."""
 
     def __init__(self, *, work_dir: Path) -> None:
         """Create an adapter targeting the given working directory."""
         self._work_dir = work_dir
 
-    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
         """Run claude synchronously and return the result."""
-        cmd = self._build_cmd(prompt=prompt, system_prompt=system_prompt)
+        cmd = self._build_cmd(
+            prompt=prompt, system_prompt=system_prompt, allowed_tools=allowed_tools
+        )
         proc = subprocess.run(  # noqa: S603
             cmd, capture_output=True, text=True, check=False, cwd=self._work_dir
         )
@@ -37,8 +46,19 @@ class ShellAgentAdapter:
             cwd=self._work_dir,
         )
 
-    def _build_cmd(self, *, prompt: str, system_prompt: str | None = None) -> list[str]:
+    def _build_cmd(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> list[str]:
         cmd = ["claude", "-p", prompt]
         if system_prompt is not None:
             cmd.extend(["--system-prompt", system_prompt])
+        if allowed_tools is not None:
+            cmd.extend(["--tools", ",".join(allowed_tools)])
         return cmd
+
+
+ShellAgentAdapter = SubprocessAgent

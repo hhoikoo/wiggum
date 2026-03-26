@@ -139,3 +139,111 @@ class TestRunChecksOutputCapture:
         mock_run.side_effect = _side_effect(test_stdout="3 passed")
         result = run_checks(repo_path=_REPO_PATH)
         assert "3 passed" in result.test_output
+
+
+# -- run_autofix ---------------------------------------------------------------
+
+
+class TestRunAutofixImport:
+    """run_autofix is importable from wiggum.checks."""
+
+    def test_importable(self):
+        from wiggum.checks import run_autofix
+
+        assert callable(run_autofix)
+
+
+class TestRunAutofixUsesFixFlag:
+    """run_autofix invokes ruff with --fix."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_command_includes_fix_flag(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed()
+        run_autofix(repo_path=_REPO_PATH)
+        ruff_calls = [c for c in mock_run.call_args_list if "ruff" in c.args[0]]
+        assert len(ruff_calls) == 1
+        assert "--fix" in ruff_calls[0].args[0]
+
+
+class TestRunAutofixNoUnsafeFixes:
+    """run_autofix must NOT use --unsafe-fixes."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_command_excludes_unsafe_fixes(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed()
+        run_autofix(repo_path=_REPO_PATH)
+        ruff_calls = [c for c in mock_run.call_args_list if "ruff" in c.args[0]]
+        assert len(ruff_calls) == 1
+        assert "--unsafe-fixes" not in ruff_calls[0].args[0]
+
+
+class TestRunAutofixRunsInRepoDir:
+    """run_autofix runs in the specified repo directory."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_cwd_is_repo_path(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed()
+        run_autofix(repo_path=_REPO_PATH)
+        for c in mock_run.call_args_list:
+            assert c.kwargs.get("cwd") == _REPO_PATH
+
+
+class TestRunAutofixReturnType:
+    """run_autofix returns an AutofixResult."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_returns_autofix_result(self, mock_run):
+        from wiggum.checks import AutofixResult, run_autofix
+
+        mock_run.return_value = _completed()
+        result = run_autofix(repo_path=_REPO_PATH)
+        assert isinstance(result, AutofixResult)
+
+
+class TestAutofixResultFields:
+    """AutofixResult exposes success status and output."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_success_when_returncode_zero(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed(returncode=0, stdout="All checks passed")
+        result = run_autofix(repo_path=_REPO_PATH)
+        assert result.success is True
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_failure_when_returncode_nonzero(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed(returncode=1, stdout="Found 3 errors")
+        result = run_autofix(repo_path=_REPO_PATH)
+        assert result.success is False
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_captures_output(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed(stdout="Fixed 2 errors")
+        result = run_autofix(repo_path=_REPO_PATH)
+        assert result.output == "Fixed 2 errors"
+
+
+class TestRunAutofixTargetsDirs:
+    """run_autofix targets src/ and tests/ directories."""
+
+    @patch("wiggum.checks.subprocess.run")
+    def test_command_includes_src_and_tests(self, mock_run):
+        from wiggum.checks import run_autofix
+
+        mock_run.return_value = _completed()
+        run_autofix(repo_path=_REPO_PATH)
+        ruff_calls = [c for c in mock_run.call_args_list if "ruff" in c.args[0]]
+        cmd = ruff_calls[0].args[0]
+        assert "src/" in cmd
+        assert "tests/" in cmd

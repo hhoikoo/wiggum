@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from wiggum.git.port import GitPort
+from wiggum.git import GitPort
 
 
 @dataclass

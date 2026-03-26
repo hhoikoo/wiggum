@@ -39,7 +39,13 @@ class FakeAgent:
         self.run_calls: list[str] = []
         self._lock = threading.Lock()
 
-    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
         """Record the prompt and return a successful result."""
         with self._lock:
             self.run_calls.append(prompt)
@@ -125,7 +131,11 @@ class TestRedPhaseParallelism:
             run_calls: ClassVar[list[str]] = []
 
             def run(
-                self, *, prompt: str, system_prompt: str | None = None
+                self,
+                *,
+                prompt: str,
+                system_prompt: str | None = None,
+                allowed_tools: Sequence[str] | None = None,
             ) -> AgentResult:
                 """Track concurrent invocations."""
                 nonlocal concurrency_high_water, active_count
@@ -177,7 +187,13 @@ class _SequentialAgent:
         self._counter = 0
         self._lock = threading.Lock()
 
-    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
         """Record prompt and assign a sequential index."""
         with self._lock:
             self.prompts.append(prompt)
@@ -273,7 +289,11 @@ class TestGreenPhaseSequential:
             prompts: ClassVar[list[str]] = []
 
             def run(
-                self, *, prompt: str, system_prompt: str | None = None
+                self,
+                *,
+                prompt: str,
+                system_prompt: str | None = None,
+                allowed_tools: Sequence[str] | None = None,
             ) -> AgentResult:
                 """Track concurrent invocations via active counter."""
                 nonlocal max_concurrent, active
@@ -315,7 +335,11 @@ class TestGreenPhaseSequential:
                 self._index = 0
 
             def run(
-                self, *, prompt: str, system_prompt: str | None = None
+                self,
+                *,
+                prompt: str,
+                system_prompt: str | None = None,
+                allowed_tools: Sequence[str] | None = None,
             ) -> AgentResult:
                 """Return the next pre-configured result."""
                 r = results_per_item[self._index]
@@ -563,7 +587,13 @@ class _InnerLoopAgent:
             f"{i + 1}. {d}" for i, d in enumerate(item_descriptions)
         )
 
-    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
         """Record the call and return a canned numbered-list response."""
         self.calls.append(prompt)
         return AgentResult(stdout=self._response, stderr="", exit_code=0)
@@ -766,7 +796,13 @@ class _GapsAgent:
         self.calls: list[str] = []
         self._response = "\n".join(f"{i + 1}. {g}" for i, g in enumerate(gaps))
 
-    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
         """Record the call and return the canned response."""
         self.calls.append(prompt)
         return AgentResult(stdout=self._response, stderr="", exit_code=0)
@@ -857,3 +893,395 @@ class TestFindGapsProtocol:
     def test_gaps_agent_is_agent_port(self) -> None:
         agent = _GapsAgent([])
         assert isinstance(agent, AgentPort)
+
+
+# -- red_phase prompt content --------------------------------------------------
+
+_RED_BATCH: Sequence[PlanItem] = (
+    PlanItem(description="Add user login endpoint"),
+    PlanItem(description="Create database migration"),
+    PlanItem(description="Write input validation"),
+)
+
+_RED_PLAN_TEXT = """\
+# Phase 1
+
+### Auth
+- [x] Add session tokens
+- [ ] Add user login endpoint
+
+### DB
+- [ ] Create database migration
+"""
+
+
+class _PromptCapturingAgent:
+    """Agent that captures prompts for assertion."""
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+        self._lock = threading.Lock()
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
+        """Record the prompt."""
+        with self._lock:
+            self.prompts.append(prompt)
+        return AgentResult(stdout="test written", stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+class TestRedPromptIncludesBatchList:
+    """red_phase prompt includes descriptions of all items in the batch."""
+
+    def test_prompt_contains_all_batch_descriptions(self) -> None:
+        agent = _PromptCapturingAgent()
+        single_item = [_RED_BATCH[0]]
+        red_phase(
+            items=single_item, agent=agent, batch=_RED_BATCH, plan_text=_RED_PLAN_TEXT
+        )
+        prompt = agent.prompts[0]
+        for item in _RED_BATCH:
+            assert item.description in prompt
+
+    def test_batch_items_not_being_tested_still_appear(self) -> None:
+        agent = _PromptCapturingAgent()
+        single_item = [_RED_BATCH[0]]
+        red_phase(
+            items=single_item, agent=agent, batch=_RED_BATCH, plan_text=_RED_PLAN_TEXT
+        )
+        prompt = agent.prompts[0]
+        assert _RED_BATCH[1].description in prompt
+        assert _RED_BATCH[2].description in prompt
+
+
+class TestRedPromptIncludesPlan:
+    """red_phase prompt includes the existing plan text."""
+
+    def test_prompt_contains_plan_text(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH[:1]),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        prompt = agent.prompts[0]
+        assert "Add session tokens" in prompt
+        assert "Create database migration" in prompt
+
+    def test_plan_text_present_for_each_item(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        for prompt in agent.prompts:
+            assert "Phase 1" in prompt
+
+
+class TestRedPromptIncludesPreamble:
+    """red_phase prompt includes project conventions preamble."""
+
+    def test_mentions_docstrings(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH[:1]),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        prompt = agent.prompts[0]
+        assert "docstring" in prompt.lower()
+
+    def test_mentions_type_checking(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH[:1]),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        prompt = agent.prompts[0]
+        assert "TYPE_CHECKING" in prompt
+
+    def test_mentions_pep695(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH[:1]),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        prompt = agent.prompts[0]
+        assert "PEP 695" in prompt or "pep 695" in prompt.lower()
+
+    def test_mentions_tc003_noqa(self) -> None:
+        agent = _PromptCapturingAgent()
+        red_phase(
+            items=list(_RED_BATCH[:1]),
+            agent=agent,
+            batch=_RED_BATCH,
+            plan_text=_RED_PLAN_TEXT,
+        )
+        prompt = agent.prompts[0]
+        assert "TC003" in prompt
+
+
+# -- extract_new_todos --------------------------------------------------------
+
+
+class TestExtractNewTodosImport:
+    """extract_new_todos is importable from wiggum.loop."""
+
+    def test_importable(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        assert callable(extract_new_todos)
+
+
+class TestExtractNewTodosParsing:
+    """extract_new_todos parses NEW_TODO lines from agent output."""
+
+    def test_extracts_single_todo(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        output = "some text\nNEW_TODO: Add input validation\nmore text"
+        assert extract_new_todos(output) == ["Add input validation"]
+
+    def test_extracts_multiple_todos(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        output = "NEW_TODO: First thing\nother stuff\nNEW_TODO: Second thing"
+        assert extract_new_todos(output) == ["First thing", "Second thing"]
+
+    def test_returns_empty_for_no_todos(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        assert extract_new_todos("all good, no issues") == []
+
+    def test_returns_empty_for_empty_string(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        assert extract_new_todos("") == []
+
+    def test_ignores_indented_lines(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        output = "  NEW_TODO: indented should be ignored"
+        assert extract_new_todos(output) == []
+
+    def test_ignores_mid_line_occurrences(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        output = "I found a NEW_TODO: that should be ignored"
+        assert extract_new_todos(output) == []
+
+    def test_preserves_order(self) -> None:
+        from wiggum.loop import extract_new_todos
+
+        output = "NEW_TODO: Alpha\nNEW_TODO: Beta\nNEW_TODO: Gamma"
+        assert extract_new_todos(output) == ["Alpha", "Beta", "Gamma"]
+
+
+# -- collect_scoped_todos -----------------------------------------------------
+
+
+class TestCollectScopedTodosImport:
+    """collect_scoped_todos is importable from wiggum.loop."""
+
+    def test_importable(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        assert callable(collect_scoped_todos)
+
+
+class TestCollectScopedTodosMapping:
+    """collect_scoped_todos pairs NEW_TODOs with the items that produced them."""
+
+    def test_maps_todos_to_producing_item(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        items = [
+            PlanItem(description="Add login"),
+            PlanItem(description="Add logout"),
+        ]
+        results = [
+            AgentResult(
+                stdout="NEW_TODO: Need auth middleware", stderr="", exit_code=0
+            ),
+            AgentResult(stdout="done, no gaps", stderr="", exit_code=0),
+        ]
+        scoped = collect_scoped_todos(items=items, results=results)
+        assert scoped["Add login"] == ["Need auth middleware"]
+        assert scoped["Add logout"] == []
+
+    def test_multiple_todos_from_single_item(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        items = [PlanItem(description="Build API")]
+        results = [
+            AgentResult(
+                stdout="NEW_TODO: Need schema\nNEW_TODO: Need validation",
+                stderr="",
+                exit_code=0,
+            ),
+        ]
+        scoped = collect_scoped_todos(items=items, results=results)
+        assert scoped["Build API"] == ["Need schema", "Need validation"]
+
+    def test_no_todos_yields_empty_lists(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        items = [
+            PlanItem(description="Task A"),
+            PlanItem(description="Task B"),
+        ]
+        results = [
+            AgentResult(stdout="done", stderr="", exit_code=0),
+            AgentResult(stdout="done", stderr="", exit_code=0),
+        ]
+        scoped = collect_scoped_todos(items=items, results=results)
+        assert scoped["Task A"] == []
+        assert scoped["Task B"] == []
+
+    def test_todos_are_not_merged_across_items(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        items = [
+            PlanItem(description="Item X"),
+            PlanItem(description="Item Y"),
+        ]
+        results = [
+            AgentResult(stdout="NEW_TODO: Gap for X", stderr="", exit_code=0),
+            AgentResult(stdout="NEW_TODO: Gap for Y", stderr="", exit_code=0),
+        ]
+        scoped = collect_scoped_todos(items=items, results=results)
+        assert scoped["Item X"] == ["Gap for X"]
+        assert scoped["Item Y"] == ["Gap for Y"]
+
+    def test_empty_items_returns_empty_dict(self) -> None:
+        from wiggum.loop import collect_scoped_todos
+
+        scoped = collect_scoped_todos(items=[], results=[])
+        assert scoped == {}
+
+
+# -- Tool restriction tracking ------------------------------------------------
+
+
+class _ToolTrackingAgent:
+    """Agent that records allowed_tools passed to each call."""
+
+    def __init__(self) -> None:
+        self.run_kwargs: list[dict[str, object]] = []
+        self._lock = threading.Lock()
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
+        """Record call kwargs including allowed_tools."""
+        with self._lock:
+            self.run_kwargs.append({"prompt": prompt, "allowed_tools": allowed_tools})
+        return AgentResult(stdout="ok", stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+# -- red_phase: tool restrictions ---------------------------------------------
+
+
+class TestRedPhaseToolRestrictions:
+    """RED agents must not have Bash access."""
+
+    def test_passes_allowed_tools(self) -> None:
+        """red_phase must specify allowed_tools for each agent call."""
+        agent = _ToolTrackingAgent()
+        red_phase(items=list(_ITEMS), agent=agent)
+        for call in agent.run_kwargs:
+            assert call["allowed_tools"] is not None, (
+                "red_phase must specify allowed_tools"
+            )
+
+    def test_excludes_bash(self) -> None:
+        """RED agents must not have Bash in their allowed tools."""
+        agent = _ToolTrackingAgent()
+        red_phase(items=list(_ITEMS), agent=agent)
+        for call in agent.run_kwargs:
+            tools = call["allowed_tools"]
+            assert tools is not None, "red_phase must specify allowed_tools"
+            assert "Bash" not in tools
+
+
+# -- green_phase: tool restrictions -------------------------------------------
+
+
+class TestGreenPhaseToolRestrictions:
+    """GREEN round 1 has no Bash (fast parallel)."""
+
+    def test_passes_allowed_tools(self) -> None:
+        """green_phase must specify allowed_tools for each agent call."""
+        agent = _ToolTrackingAgent()
+        green_phase(items=_GREEN_ITEMS, agent=agent)
+        for call in agent.run_kwargs:
+            assert call["allowed_tools"] is not None, (
+                "green_phase must specify allowed_tools"
+            )
+
+    def test_excludes_bash(self) -> None:
+        """GREEN round 1 agents must not have Bash in their allowed tools."""
+        agent = _ToolTrackingAgent()
+        green_phase(items=_GREEN_ITEMS, agent=agent)
+        for call in agent.run_kwargs:
+            tools = call["allowed_tools"]
+            assert tools is not None, "green_phase must specify allowed_tools"
+            assert "Bash" not in tools
+
+
+# -- fix_loop: tool restrictions ----------------------------------------------
+
+
+class TestFixLoopToolRestrictions:
+    """GREEN fix rounds get Bash for ruff verification."""
+
+    def test_passes_allowed_tools(self) -> None:
+        """fix_loop must specify allowed_tools for each agent call."""
+        agent = _ToolTrackingAgent()
+        results = [
+            CheckResult(passed=False, output="error"),
+            CheckResult(passed=True, output=""),
+        ]
+        fix_loop(agent=agent, check=_make_check(results))
+        for call in agent.run_kwargs:
+            assert call["allowed_tools"] is not None, (
+                "fix_loop must specify allowed_tools"
+            )
+
+    def test_includes_bash(self) -> None:
+        """Fix round agents must have Bash in their allowed tools."""
+        agent = _ToolTrackingAgent()
+        results = [
+            CheckResult(passed=False, output="error"),
+            CheckResult(passed=True, output=""),
+        ]
+        fix_loop(agent=agent, check=_make_check(results))
+        for call in agent.run_kwargs:
+            tools = call["allowed_tools"]
+            assert tools is not None, "fix_loop must specify allowed_tools"
+            assert "Bash" in tools

@@ -25,6 +25,26 @@ class CheckResult:
         return self.lint_passed and self.test_passed
 
 
+@dataclass(frozen=True, slots=True)
+class AutofixResult:
+    """Result of running ruff autofix."""
+
+    success: bool
+    output: str
+
+
+def run_autofix(*, repo_path: Path) -> AutofixResult:
+    """Run ruff check --fix on src/ and tests/."""
+    result = subprocess.run(
+        ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"],  # noqa: S607
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return AutofixResult(success=result.returncode == 0, output=result.stdout)
+
+
 def run_checks(*, repo_path: Path) -> CheckResult:
     """Run ruff check and pytest, returning a combined result."""
     lint = subprocess.run(

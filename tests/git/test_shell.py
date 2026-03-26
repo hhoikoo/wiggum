@@ -157,7 +157,7 @@ class TestAdd:
         assert "A  b.txt" in result.stdout
 
     def test_add_signature_matches_git_port(self, git_repo: Path):
-        from wiggum.git.port import GitPort
+        from wiggum.git import GitPort
         from wiggum.git.shell import ShellGitAdapter
 
         adapter = ShellGitAdapter(repo_path=git_repo)

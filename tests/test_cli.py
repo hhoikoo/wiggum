@@ -29,8 +29,8 @@ class TestRunSubcommand:
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
             patch("wiggum.cli.inner_loop"),
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             app(["run", str(plan_file)], exit_on_error=False)
@@ -60,8 +60,8 @@ class TestRunWiring:
             patch("wiggum.cli.validate_startup") as mock_validate,
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
             patch("wiggum.cli.inner_loop"),
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             app(["run", str(plan_file)], exit_on_error=False)
@@ -74,8 +74,8 @@ class TestRunWiring:
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()) as mock_load,
             patch("wiggum.cli.inner_loop"),
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             app(["run", str(plan_file)], exit_on_error=False)
@@ -89,8 +89,8 @@ class TestRunWiring:
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=config),
             patch("wiggum.cli.inner_loop") as mock_loop,
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter") as mock_agent_cls,
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent") as mock_agent_cls,
         ):
             mock_git = mock_git_cls.return_value
             mock_git.repo_root.return_value = tmp_path
@@ -110,8 +110,8 @@ class TestRunWiring:
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
             patch("wiggum.cli.inner_loop"),
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             app(["run", str(plan_file)], exit_on_error=False)
@@ -124,8 +124,8 @@ class TestRunWiring:
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
             patch("wiggum.cli.inner_loop"),
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter") as mock_agent_cls,
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent") as mock_agent_cls,
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             app(["run", str(plan_file)], exit_on_error=False)
@@ -141,8 +141,8 @@ class TestRunWiring:
             ),
             patch("wiggum.cli.load_config") as mock_load,
             patch("wiggum.cli.inner_loop") as mock_loop,
-            patch("wiggum.cli.ShellGitAdapter") as mock_git_cls,
-            patch("wiggum.cli.ShellAgentAdapter"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
         ):
             mock_git_cls.return_value.repo_root.return_value = tmp_path
             with pytest.raises(SystemExit):
