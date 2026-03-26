@@ -1,5 +1,6 @@
 """Subprocess-based git adapter."""
 
+import os
 import subprocess
 from collections.abc import (
     Sequence,  # noqa: TC003 - needed at runtime for inspect.signature
@@ -113,8 +114,16 @@ class SubprocessGit:
 
     def rebase_continue(self) -> bool:
         """Continue an in-progress rebase after conflict resolution."""
+        env = {**os.environ, "GIT_EDITOR": "true"}
         try:
-            self._run("rebase", "--continue")
+            subprocess.run(
+                ["git", "rebase", "--continue"],  # noqa: S607
+                cwd=self._repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+                env=env,
+            )
         except subprocess.CalledProcessError:
             return False
         return True
