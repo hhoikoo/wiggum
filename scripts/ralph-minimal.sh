@@ -27,9 +27,42 @@ LOG_FILE="${WORK_DIR}/ralph.log"
 PREAMBLE_FILE="${WORK_DIR}/preamble.md"
 
 cleanup() { rm -rf "$WORK_DIR"; }
+
+CHILD_PIDS=()
+
+# Kill all child processes (including running claude -p sessions) on interrupt.
+abort() {
+    log "INTERRUPTED -- killing child processes..."
+    for pid in "${CHILD_PIDS[@]}"; do
+        kill "$pid" 2>/dev/null || true
+    done
+    # Also kill entire process group as fallback.
+    kill -- -$$ 2>/dev/null || true
+    cleanup
+    exit 130
+}
+trap abort INT TERM
 trap cleanup EXIT
 
-log() { printf '[ralph] %s\n' "$*" | tee -a "$LOG_FILE"; }
+RALPH_START="$(date +%s)"
+
+log() {
+    local now elapsed
+    now="$(date '+%H:%M:%S')"
+    elapsed=$(( $(date +%s) - RALPH_START ))
+    printf '[ralph %s +%dm%02ds] %s\n' "$now" $((elapsed / 60)) $((elapsed % 60)) "$*" | tee -a "$LOG_FILE"
+}
+
+# Phase timer -- call phase_start before a phase, phase_end after.
+_PHASE_START=0
+phase_start() {
+    _PHASE_START="$(date +%s)"
+    log "$1"
+}
+phase_end() {
+    local dur=$(( $(date +%s) - _PHASE_START ))
+    log "$1 (${dur}s)"
+}
 
 # --------------------------------------------------------------------------- #
 # Checklist utilities
@@ -104,13 +137,21 @@ claude_run() {
     if [ -n "$tools" ]; then
         flags+=(--tools "$tools")
     fi
-    timeout "$AGENT_TIMEOUT" claude -p "$prompt" "${flags[@]}" 2>>"$LOG_FILE" || {
+    local out_tmp="${WORK_DIR}/run_$$.out"
+    timeout "$AGENT_TIMEOUT" claude -p "$prompt" "${flags[@]}" > "$out_tmp" 2>>"$LOG_FILE" &
+    local pid=$!
+    CHILD_PIDS+=("$pid")
+    wait "$pid" || {
         local rc=$?
         if [ "$rc" -eq 124 ]; then
             log "TIMEOUT after ${AGENT_TIMEOUT}s: $label"
         fi
+        cat "$out_tmp" 2>/dev/null
+        rm -f "$out_tmp"
         return "$rc"
     }
+    cat "$out_tmp" 2>/dev/null
+    rm -f "$out_tmp"
 }
 
 # Run claude -p in background, stdout to file. Returns immediately.
@@ -126,6 +167,7 @@ claude_bg() {
         flags+=(--tools "$tools")
     fi
     timeout "$AGENT_TIMEOUT" claude -p "$prompt" "${flags[@]}" > "$out_file" 2>>"$LOG_FILE" &
+    CHILD_PIDS+=($!)
 }
 
 # Scan output files for NEW_TODO lines and append them to the plan.
@@ -147,7 +189,7 @@ harvest_todos() {
 
 run_checks() {
     local tag="$1"
-    log "Running checks ($tag)..."
+    phase_start "Running checks ($tag)..."
 
     local lint_out="${WORK_DIR}/lint_${tag}.out"
     local test_out="${WORK_DIR}/test_${tag}.out"
@@ -156,7 +198,7 @@ run_checks() {
     (cd "$PROJECT_DIR" && uv run ruff check src/ tests/) > "$lint_out" 2>&1 || lint_rc=$?
     (cd "$PROJECT_DIR" && uv run pytest) > "$test_out" 2>&1 || test_rc=$?
 
-    log "Lint rc=$lint_rc | Pytest rc=$test_rc ($tag)"
+    phase_end "Lint rc=$lint_rc | Pytest rc=$test_rc ($tag)"
 
     # pytest exit 5 = no tests collected -- treat as passing for early bootstrap
     if [ "$lint_rc" -eq 0 ] && { [ "$test_rc" -eq 0 ] || [ "$test_rc" -eq 5 ]; }; then
@@ -170,7 +212,7 @@ run_checks() {
 # --------------------------------------------------------------------------- #
 
 outer_loop() {
-    log "=== OUTER LOOP: recalibrating plan ==="
+    phase_start "=== OUTER LOOP: recalibrating plan ==="
 
     local plan_content
     plan_content="$(cat "$PLAN_FILE")"
@@ -202,9 +244,9 @@ EOF
     if echo "$recalibrated" | grep -q '^- \[[ x]\] '; then
         echo "$recalibrated" > "$PLAN_FILE"
         remove_checked
-        log "Plan recalibrated. $(count_unchecked) items remain."
+        phase_end "Plan recalibrated. $(count_unchecked) items remain."
     else
-        log "WARNING: recalibration output invalid, keeping current plan."
+        phase_end "WARNING: recalibration output invalid, keeping current plan."
     fi
 }
 
@@ -245,7 +287,7 @@ EOF
 # --------------------------------------------------------------------------- #
 
 red_phase() {
-    log "--- RED PHASE: writing failing tests ---"
+    phase_start "--- RED PHASE: writing failing tests ---"
 
     # Tools restricted: no Bash = cannot run tests.
     local red_tools="Read,Write,Edit,Glob,Grep"
@@ -277,7 +319,7 @@ EOF
 
     for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
     harvest_todos "${WORK_DIR}/red_*.out"
-    log "RED phase complete."
+    phase_end "RED phase complete."
 }
 
 # --------------------------------------------------------------------------- #
@@ -285,7 +327,7 @@ EOF
 # --------------------------------------------------------------------------- #
 
 green_phase() {
-    log "--- GREEN PHASE: implementing fixes ---"
+    phase_start "--- GREEN PHASE: implementing fixes ---"
 
     # Tools restricted: no Bash = cannot run tests.
     local green_tools="Read,Write,Edit,Glob,Grep"
@@ -321,7 +363,7 @@ EOF
         ((i++))
     done
 
-    log "GREEN phase complete."
+    phase_end "GREEN phase complete."
 }
 
 # --------------------------------------------------------------------------- #
@@ -372,7 +414,7 @@ EOF
 # --------------------------------------------------------------------------- #
 
 inner_loop() {
-    log "=== INNER LOOP: processing batch ==="
+    phase_start "=== INNER LOOP: processing batch ==="
 
     # Priority selection.
     local selection
@@ -479,6 +521,7 @@ fi
 cycle=0
 while true; do
     ((cycle++))
+    cycle_start="$(date +%s)"
     log "======== CYCLE $cycle ========"
 
     outer_loop
@@ -492,6 +535,9 @@ while true; do
     log "$remaining items remaining."
 
     inner_loop || true
+
+    cycle_dur=$(( $(date +%s) - cycle_start ))
+    log "======== CYCLE $cycle DONE (${cycle_dur}s) ========"
 
     if [ "$CYCLE_LIMIT" -gt 0 ] && [ "$cycle" -ge "$CYCLE_LIMIT" ]; then
         log "Cycle limit reached ($CYCLE_LIMIT). Stopping."
