@@ -15,7 +15,7 @@ Fetch and display the details of an issue.
 
 1. Fetch the issue:
    ```bash
-   $CLAUDE_PROJECT_DIR/.claude/scripts/issue-view.sh $ARGUMENTS
+   .claude/scripts/issue-view.sh $ARGUMENTS
    ```
 2. Parse the returned JSON fields: `key`, `summary`, `description`, `type`, `status`, `parent`.
 3. Print the issue details in a readable format:

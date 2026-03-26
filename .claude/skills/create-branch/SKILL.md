@@ -16,7 +16,7 @@ Create a branch and check it out. Supports two modes: ticket-based (with ticket 
 ## Step 0: Resolve default branch
 
 ```bash
-$CLAUDE_PROJECT_DIR/.claude/scripts/resolve-base-branch.sh
+.claude/scripts/resolve-base-branch.sh
 ```
 
 Use the output as `<default-branch>` throughout this skill.
@@ -52,7 +52,7 @@ If `$ARGUMENTS` starts with a number (GitHub issue number, e.g., `42`), use **ti
 
 1. Fetch ticket details:
    ```bash
-   $CLAUDE_PROJECT_DIR/.claude/scripts/issue-view.sh <ticket-id>
+   .claude/scripts/issue-view.sh <ticket-id>
    ```
 2. Determine the commit type prefix. Use the issue type mappings below, starting from the issue type's `commit_type`, then refine using the ticket title and the inference table.
    Issue type to commit type mapping:

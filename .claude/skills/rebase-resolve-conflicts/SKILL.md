@@ -19,7 +19,7 @@ Rebase the current branch onto its base branch, resolving any merge conflicts th
 ### 1. Resolve Base Branch
 
 ```bash
-$CLAUDE_PROJECT_DIR/.claude/scripts/resolve-base-branch.sh
+.claude/scripts/resolve-base-branch.sh
 ```
 
 ### 2. Fetch and Check

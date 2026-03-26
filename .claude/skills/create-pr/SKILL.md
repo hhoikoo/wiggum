@@ -20,7 +20,7 @@ Create a pull request following project conventions.
 0. **Resolve base branch:**
 
    ```bash
-   $CLAUDE_PROJECT_DIR/.claude/scripts/resolve-base-branch.sh
+   .claude/scripts/resolve-base-branch.sh
    ```
 
    Use the output as `<base>` throughout this skill.
@@ -58,7 +58,7 @@ Create a pull request following project conventions.
 5a. **Link issue to PR:**
    - If a ticket ID was resolved in step 0:
      1. Wait 15 seconds (gives `pr-issue-link.yml` CI workflow time to run first).
-     2. Call $CLAUDE_PROJECT_DIR/.claude/scripts/pr-link-issue.sh <pr-number> <ticket-id> as backup -- if CI already linked it, the script exits cleanly; if not, it appends the reference.
+     2. Call .claude/scripts/pr-link-issue.sh <pr-number> <ticket-id> as backup -- if CI already linked it, the script exits cleanly; if not, it appends the reference.
 
 6. **Request reviews:**
    - **Skip this step** if `$ARGUMENTS` contains `--no-review`.

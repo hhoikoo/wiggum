@@ -73,7 +73,7 @@ gh api user --jq .login
 
 4. Create the issue (body is applied by the provider at creation time):
    ```bash
-   $CLAUDE_PROJECT_DIR/.claude/scripts/issue-create.sh -t "<type>" -s "<summary>" [-b <body-file>] [-P <parent>] [-a <assignee>] [-S <points>] [-g <repo>] [-l <label>]...
+   .claude/scripts/issue-create.sh -t "<type>" -s "<summary>" [-b <body-file>] [-P <parent>] [-a <assignee>] [-S <points>] [-g <repo>] [-l <label>]...
    ```
    Read the created issue key from stdout.
 
