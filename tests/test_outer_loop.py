@@ -1,4 +1,4 @@
-"""Tests for verify_checked(), reorganize_findings(), and outer_loop() in wiggum.outer_loop."""
+"""Tests for verify_checked(), reorganize_findings(), outer_loop(), and rebase_onto_base() in wiggum.outer_loop."""
 
 import json
 import textwrap
@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 
 from wiggum.agent import AgentPort, AgentResult
 from wiggum.config import WiggumConfig
-from wiggum.outer_loop import outer_loop, reorganize_findings, verify_checked
+from wiggum.outer_loop import (
+    outer_loop,
+    rebase_onto_base,
+    reorganize_findings,
+    verify_checked,
+)
 from wiggum.plan import PlanItem, parse_plan
 
 if TYPE_CHECKING:
@@ -772,3 +777,153 @@ class TestOuterLoopProtocol:
 
     def test_outer_loop_agent_is_agent_port(self) -> None:
         assert isinstance(_OuterLoopAgent(), AgentPort)
+
+
+# == rebase_onto_base tests ==================================================
+
+
+class _RebaseGit:
+    """Git fake that records calls for rebase_onto_base tests."""
+
+    def __init__(self, *, rebase_succeeds: bool = True, default: str = "main") -> None:
+        self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self._rebase_succeeds = rebase_succeeds
+        self._default = default
+
+    def repo_root(self) -> Path:
+        """Return a fake repo root."""
+        return Path("/fake")
+
+    def is_repo(self) -> bool:
+        """Return True."""
+        return True
+
+    def current_branch(self) -> str:
+        """Return a fake branch."""
+        return "feat/work"
+
+    def status(self) -> Sequence[StatusEntry]:
+        """Return empty status."""
+        return []
+
+    def diff(self, *, staged: bool = False) -> str:
+        """Return empty diff."""
+        return ""
+
+    def diff_names(self, *, staged: bool = False) -> Sequence[str]:
+        """Return empty diff names."""
+        return []
+
+    def log(self, *, max_count: int = 10) -> Sequence[LogEntry]:
+        """Return empty log."""
+        return []
+
+    def add(self, paths: Sequence[str]) -> None:
+        """No-op."""
+
+    def stage_all(self) -> None:
+        """No-op."""
+
+    def commit(self, message: str) -> None:
+        """No-op."""
+
+    def fetch(self, remote: str, branch: str) -> None:
+        """Record fetch call."""
+        self.calls.append(("fetch", (remote, branch)))
+
+    def rebase(self, onto: str) -> bool:
+        """Record rebase call and return configured result."""
+        self.calls.append(("rebase", (onto,)))
+        return self._rebase_succeeds
+
+    def rebase_abort(self) -> None:
+        """Record rebase_abort call."""
+        self.calls.append(("rebase_abort", ()))
+
+    def default_branch(self) -> str:
+        """Return configured default branch."""
+        self.calls.append(("default_branch", ()))
+        return self._default
+
+
+# -- base branch selection ----------------------------------------------------
+
+
+class TestRebaseOntoBaseBranchSelection:
+    """rebase_onto_base uses config.base_branch when set, otherwise auto-detects."""
+
+    def test_uses_config_base_branch(self) -> None:
+        git = _RebaseGit()
+        config = WiggumConfig(base_branch="develop")
+        rebase_onto_base(git=git, config=config)
+        fetch_calls = [c for c in git.calls if c[0] == "fetch"]
+        assert len(fetch_calls) == 1
+        assert fetch_calls[0][1] == ("origin", "develop")
+
+    def test_auto_detects_when_base_branch_is_none(self) -> None:
+        git = _RebaseGit(default="trunk")
+        config = WiggumConfig(base_branch=None)
+        rebase_onto_base(git=git, config=config)
+        assert ("default_branch", ()) in git.calls
+
+    def test_fetches_auto_detected_branch(self) -> None:
+        git = _RebaseGit(default="trunk")
+        config = WiggumConfig(base_branch=None)
+        rebase_onto_base(git=git, config=config)
+        fetch_calls = [c for c in git.calls if c[0] == "fetch"]
+        assert len(fetch_calls) == 1
+        assert fetch_calls[0][1] == ("origin", "trunk")
+
+
+# -- fetch and rebase --------------------------------------------------------
+
+
+class TestRebaseOntoBaseFetchAndRebase:
+    """rebase_onto_base fetches then rebases onto the remote base branch."""
+
+    def test_rebases_onto_remote_ref(self) -> None:
+        git = _RebaseGit()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config)
+        rebase_calls = [c for c in git.calls if c[0] == "rebase"]
+        assert len(rebase_calls) == 1
+        assert rebase_calls[0][1] == ("origin/main",)
+
+    def test_fetch_before_rebase(self) -> None:
+        git = _RebaseGit()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config)
+        call_names = [c[0] for c in git.calls]
+        assert call_names.index("fetch") < call_names.index("rebase")
+
+
+# -- conflict handling -------------------------------------------------------
+
+
+class TestRebaseOntoBaseConflict:
+    """rebase_onto_base aborts rebase on conflict."""
+
+    def test_aborts_on_conflict(self) -> None:
+        git = _RebaseGit(rebase_succeeds=False)
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config)
+        assert ("rebase_abort", ()) in git.calls
+
+    def test_no_abort_on_success(self) -> None:
+        git = _RebaseGit(rebase_succeeds=True)
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config)
+        abort_calls = [c for c in git.calls if c[0] == "rebase_abort"]
+        assert len(abort_calls) == 0
+
+
+# -- protocol conformance for rebase git fake ---------------------------------
+
+
+class TestRebaseOntoBaseProtocol:
+    """Rebase git fake satisfies GitClient protocol."""
+
+    def test_rebase_git_is_git_port(self) -> None:
+        from wiggum.git import GitPort
+
+        assert isinstance(_RebaseGit(), GitPort)

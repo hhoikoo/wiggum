@@ -14,6 +14,16 @@ if TYPE_CHECKING:
     from wiggum.git import GitClient
 
 
+def rebase_onto_base(*, git: GitClient, config: WiggumConfig) -> None:
+    """Fetch and rebase working branch onto the base branch."""
+    branch = (
+        config.base_branch if config.base_branch is not None else git.default_branch()
+    )
+    git.fetch("origin", branch)
+    if not git.rebase(f"origin/{branch}"):
+        git.rebase_abort()
+
+
 def verify_checked(*, plan: Plan, agent: AgentService) -> list[PlanItem]:
     """Confirm [x] items are truly implemented via agent."""
     checked = [

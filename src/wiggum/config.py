@@ -1,12 +1,23 @@
 """Configuration loading and startup validation."""
 
-from __future__ import annotations
-
 import sys
 import tomllib
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+
+class WorktreeConfig(BaseModel, frozen=True):
+    """Worktree symlink configuration."""
+
+    symlink_directories: list[str] = Field(default=[".wiggum", ".claude"])
+
+
+class BuildConfig(BaseModel, frozen=True):
+    """Build and verify command configuration."""
+
+    setup_command: str | None = None
+    verify_command: str | None = None
 
 
 class WiggumConfig(BaseModel, frozen=True):
@@ -17,6 +28,8 @@ class WiggumConfig(BaseModel, frozen=True):
     max_turns: int = Field(default=50, gt=0)
     agent_timeout: int = Field(default=600, gt=0)
     base_branch: str | None = None
+    worktree: WorktreeConfig = Field(default_factory=WorktreeConfig)
+    build: BuildConfig = Field(default_factory=BuildConfig)
 
 
 def load_config(repo_path: Path) -> WiggumConfig:
@@ -42,3 +55,12 @@ def validate_startup(*, repo_path: Path) -> None:
 
     if not (repo_path / ".wiggum" / "config.toml").is_file():
         sys.exit("Fatal: missing .wiggum/config.toml")
+
+
+def get_build_config(repo_path: Path) -> dict[str, str | None]:
+    """Extract the build section from config for agent consumption."""
+    cfg = load_config(repo_path)
+    return {
+        "setup_command": cfg.build.setup_command,
+        "verify_command": cfg.build.verify_command,
+    }
