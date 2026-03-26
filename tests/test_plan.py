@@ -4,7 +4,7 @@ import textwrap
 
 import pytest
 
-from wiggum.plan import Plan, PlanItem, parse_plan
+from wiggum.plan import Plan, PlanItem, count_unchecked, get_unchecked, parse_plan
 
 SIMPLE_PLAN = textwrap.dedent("""\
     # Phase 1: Core Ralph Loop
@@ -172,3 +172,95 @@ class TestParsePlanEdgeCases:
     def test_no_title_yields_empty_string(self) -> None:
         plan = parse_plan("### Section\n- [ ] item\n")
         assert plan.title == ""
+
+
+ALL_UNCHECKED_PLAN = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [ ] Task A
+    - [ ] Task B
+
+    ### Test
+    - [ ] Task C
+""")
+
+ALL_CHECKED_PLAN = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [x] Task A
+    - [x] Task B
+""")
+
+MIXED_PLAN = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [x] Done task
+    - [ ] Pending task A
+
+    ### Test
+    - [ ] Pending task B
+    - [x] Another done task
+""")
+
+
+class TestGetUnchecked:
+    """Tests for get_unchecked query helper."""
+
+    def test_returns_all_items_when_none_checked(self) -> None:
+        plan = parse_plan(ALL_UNCHECKED_PLAN)
+        unchecked = get_unchecked(plan)
+        assert len(unchecked) == 3
+
+    def test_returns_empty_when_all_checked(self) -> None:
+        plan = parse_plan(ALL_CHECKED_PLAN)
+        unchecked = get_unchecked(plan)
+        assert unchecked == []
+
+    def test_returns_only_unchecked_items(self) -> None:
+        plan = parse_plan(MIXED_PLAN)
+        unchecked = get_unchecked(plan)
+        descriptions = [item.description for item in unchecked]
+        assert descriptions == ["Pending task A", "Pending task B"]
+
+    def test_returned_items_are_plan_items(self) -> None:
+        plan = parse_plan(ALL_UNCHECKED_PLAN)
+        unchecked = get_unchecked(plan)
+        assert all(isinstance(item, PlanItem) for item in unchecked)
+
+    def test_empty_plan_returns_empty(self) -> None:
+        plan = parse_plan(EMPTY_PLAN)
+        unchecked = get_unchecked(plan)
+        assert unchecked == []
+
+    def test_preserves_item_descriptions(self) -> None:
+        plan = parse_plan(SINGLE_ITEM_PLAN)
+        unchecked = get_unchecked(plan)
+        assert len(unchecked) == 1
+        assert unchecked[0].description == "Install dependencies"
+
+
+class TestCountUnchecked:
+    """Tests for count_unchecked query helper."""
+
+    def test_counts_all_when_none_checked(self) -> None:
+        plan = parse_plan(ALL_UNCHECKED_PLAN)
+        assert count_unchecked(plan) == 3
+
+    def test_zero_when_all_checked(self) -> None:
+        plan = parse_plan(ALL_CHECKED_PLAN)
+        assert count_unchecked(plan) == 0
+
+    def test_counts_only_unchecked(self) -> None:
+        plan = parse_plan(MIXED_PLAN)
+        assert count_unchecked(plan) == 2
+
+    def test_empty_plan_returns_zero(self) -> None:
+        plan = parse_plan(EMPTY_PLAN)
+        assert count_unchecked(plan) == 0
+
+    def test_consistent_with_get_unchecked(self) -> None:
+        plan = parse_plan(MIXED_PLAN)
+        assert count_unchecked(plan) == len(get_unchecked(plan))

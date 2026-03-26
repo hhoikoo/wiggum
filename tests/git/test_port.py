@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -38,6 +39,18 @@ class _ConformingAdapter:
 
     def commit(self, message: str) -> None:
         return
+
+    def repo_root(self) -> Path:
+        return Path("/fake/repo")
+
+    def is_repo(self) -> bool:
+        return True
+
+    def stage_all(self) -> None:
+        return
+
+    def diff_names(self) -> Sequence[str]:
+        return []
 
 
 class _MissingMethodAdapter:
@@ -79,3 +92,19 @@ def test_add_defined():
 
 def test_commit_defined():
     assert callable(getattr(GitPort, "commit", None))
+
+
+def test_repo_root_defined():
+    assert callable(getattr(GitPort, "repo_root", None))
+
+
+def test_is_repo_defined():
+    assert callable(getattr(GitPort, "is_repo", None))
+
+
+def test_stage_all_defined():
+    assert callable(getattr(GitPort, "stage_all", None))
+
+
+def test_diff_names_defined():
+    assert callable(getattr(GitPort, "diff_names", None))

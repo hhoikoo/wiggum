@@ -64,3 +64,15 @@ def parse_plan(text: str) -> Plan:
         sections.append(Plan.Section(title=current_section_title, items=current_items))
 
     return Plan(title=title, sections=sections)
+
+
+def get_unchecked(plan: Plan) -> list[PlanItem]:
+    """Return all unchecked items across all sections."""
+    return [
+        item for section in plan.sections for item in section.items if not item.checked
+    ]
+
+
+def count_unchecked(plan: Plan) -> int:
+    """Return the number of unchecked items across all sections."""
+    return len(get_unchecked(plan))

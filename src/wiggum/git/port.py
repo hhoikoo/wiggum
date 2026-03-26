@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from wiggum.git.models import LogEntry, StatusEntry
 
@@ -11,6 +12,14 @@ if TYPE_CHECKING:
 @runtime_checkable
 class GitPort(Protocol):
     """Structural interface for git operations."""
+
+    def repo_root(self) -> Path:
+        """Return the root directory of the git repository."""
+        ...
+
+    def is_repo(self) -> bool:
+        """Return whether the path is inside a git repository."""
+        ...
 
     def current_branch(self) -> str:
         """Return the name of the current branch."""
@@ -24,12 +33,20 @@ class GitPort(Protocol):
         """Return the diff output, optionally for staged changes only."""
         ...
 
+    def diff_names(self, *, staged: bool = False) -> Sequence[str]:
+        """Return file names with differences."""
+        ...
+
     def log(self, *, max_count: int = 10) -> Sequence[LogEntry]:
         """Return recent log entries up to max_count."""
         ...
 
     def add(self, paths: Sequence[str]) -> None:
         """Stage the given file paths."""
+        ...
+
+    def stage_all(self) -> None:
+        """Stage all changes in the working tree."""
         ...
 
     def commit(self, message: str) -> None:

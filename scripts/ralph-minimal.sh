@@ -120,7 +120,7 @@ cat > "$PREAMBLE_FILE" << 'PREAMBLE_EOF'
 5. Follow project conventions: Python 3.14+, src layout (src/wiggum/), pyright strict, pytest, uv.
 6. Use `uv run` for all tool invocations (ruff, pytest, pyright).
 7. All public classes, methods, and functions must have a one-line docstring.
-8. Imports used only in type annotations must be inside `if TYPE_CHECKING:` blocks.
+8. Imports used only in type annotations must be inside `if TYPE_CHECKING:` blocks. Exception: runtime_checkable Protocols need their annotation types at runtime -- use `# noqa: TC003` for those.
 9. Use modern Python syntax: PEP 695 type parameters, not TypeVar.
 10. ASCII only in code and comments.
 PREAMBLE_EOF
@@ -517,7 +517,7 @@ EOF
 green_pass() {
     local tag="$1"
     local tasks="$2"
-    local green_tools="Read,Write,Edit,Glob,Grep,Bash"
+    local tools="${3:-Read,Write,Edit,Glob,Grep}"
 
     local existing_plan
     existing_plan="$(cat "$PLAN_FILE")"
@@ -549,7 +549,7 @@ $existing_plan
 6. Do NOT refactor unrelated code.
 7. Only output NEW_TODO: for gaps that are NOT already in the plan above.
 EOF
-        )" "${WORK_DIR}/${tag}_${i}.out" "GREEN[${task:0:50}]" "$green_tools"
+        )" "${WORK_DIR}/${tag}_${i}.out" "GREEN[${task:0:50}]" "$tools"
         pids+=($!)
         ((i++))
     done <<< "$tasks"
@@ -573,11 +573,17 @@ green_phase() {
     while true; do
         ((round++))
 
+        # Round 1: no Bash (fast, just write code). Fix rounds: Bash for ruff.
+        local round_tools="Read,Write,Edit,Glob,Grep"
+        if [ "$round" -gt 1 ]; then
+            round_tools="Read,Write,Edit,Glob,Grep,Bash"
+        fi
+
         log "GREEN round $round (parallel)..."
-        green_pass "green_r${round}" "$tasks"
+        green_pass "green_r${round}" "$tasks" "$round_tools"
 
         # Auto-fix lint.
-        (cd "$PROJECT_DIR" && uv run ruff check --fix src/ tests/ 2>/dev/null || true)
+        (cd "$PROJECT_DIR" && uv run ruff check --fix --unsafe-fixes src/ tests/ 2>/dev/null || true)
         (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
 
         if run_checks "green_r${round}"; then

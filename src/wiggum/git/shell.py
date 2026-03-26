@@ -1,13 +1,13 @@
 """Subprocess-based git adapter."""
 
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from wiggum.git.models import LogEntry, StatusEntry
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
 _RECORD_SEP = "---RECORD---"
 
@@ -28,6 +28,18 @@ class ShellGitAdapter:
             check=True,
         )
         return result.stdout.rstrip()
+
+    def repo_root(self) -> Path:
+        """Return the root directory of the git repository."""
+        return Path(self._run("rev-parse", "--show-toplevel"))
+
+    def is_repo(self) -> bool:
+        """Return whether the path is inside a git repository."""
+        try:
+            self._run("rev-parse", "--git-dir")
+        except subprocess.CalledProcessError:
+            return False
+        return True
 
     def current_branch(self) -> str:
         """Return the name of the current branch."""
@@ -51,6 +63,16 @@ class ShellGitAdapter:
             args.append("--staged")
         return self._run(*args)
 
+    def diff_names(self, *, staged: bool = False) -> list[str]:
+        """Return file names with differences."""
+        args = ["diff", "--name-only"]
+        if staged:
+            args.append("--staged")
+        raw = self._run(*args)
+        if not raw:
+            return []
+        return raw.splitlines()
+
     def log(self, *, max_count: int = 10) -> Sequence[LogEntry]:
         """Return recent log entries."""
         raw = self._run(
@@ -69,6 +91,10 @@ class ShellGitAdapter:
     def add(self, *paths: str) -> None:
         """Stage files for commit."""
         self._run("add", *paths)
+
+    def stage_all(self) -> None:
+        """Stage all changes in the working tree."""
+        self._run("add", ".")
 
     def commit(self, message: str) -> None:
         """Create a commit with the given message."""

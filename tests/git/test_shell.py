@@ -158,6 +158,117 @@ class TestAdd:
         assert "A  b.txt" in result.stdout
 
 
+class TestRepoRoot:
+    def test_returns_path_object(self, git_repo: Path) -> None:
+        from pathlib import Path as PathCls
+
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        root = adapter.repo_root()
+        assert isinstance(root, PathCls)
+
+    def test_returns_repo_root_directory(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        root = adapter.repo_root()
+        assert root == git_repo
+
+    def test_resolves_from_subdirectory(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        subdir = git_repo / "subdir"
+        subdir.mkdir()
+        adapter = ShellGitAdapter(repo_path=subdir)
+        root = adapter.repo_root()
+        assert root == git_repo
+
+
+class TestIsRepo:
+    def test_true_for_git_repo(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        assert adapter.is_repo() is True
+
+    def test_false_for_non_repo(self, tmp_path: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=tmp_path)
+        assert adapter.is_repo() is False
+
+
+class TestStageAll:
+    def test_stages_all_new_files(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        (git_repo / "a.txt").write_text("a")
+        (git_repo / "b.txt").write_text("b")
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        adapter.stage_all()
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "A  a.txt" in result.stdout
+        assert "A  b.txt" in result.stdout
+
+    def test_stages_modified_files(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        (git_repo / "initial.txt").write_text("modified")
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        adapter.stage_all()
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "M  initial.txt" in result.stdout
+
+
+class TestDiffNames:
+    def test_empty_on_clean_repo(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        names = adapter.diff_names()
+        assert names == []
+
+    def test_returns_modified_file_names(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        (git_repo / "initial.txt").write_text("changed")
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        names = adapter.diff_names()
+        assert "initial.txt" in names
+
+    def test_returns_staged_file_names(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        (git_repo / "initial.txt").write_text("staged change")
+        subprocess.run(
+            ["git", "add", "."], cwd=git_repo, capture_output=True, check=True
+        )
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        names = adapter.diff_names(staged=True)
+        assert "initial.txt" in names
+
+    def test_returns_sequence_of_strings(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        (git_repo / "new.txt").write_text("new")
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        names = adapter.diff_names()
+        assert all(isinstance(n, str) for n in names)
+
+
 class TestCommit:
     def test_commit_creates_new_commit(self, git_repo: Path):
         from wiggum.git.shell import ShellGitAdapter
