@@ -1,8 +1,16 @@
 ## Task: Triage Failures
 
+### Test output
+
+{test_output}
+
+### Lint output
+
+{lint_output}
+
 ### Instructions
 
-Group the failures by root cause. Multiple tests may fail for the same reason (e.g. a missing import, a wrong return type, a missing method). Each group becomes one task.
+Group the failures above by root cause. Multiple tests may fail for the same reason (e.g. a missing import, a wrong return type, a missing method). Each group becomes one fix task.
 
 Output one task per line. Each line should describe the root cause and list the affected tests/files. Example:
 Missing GitPort.status method -- FAILED tests/test_git.py::test_status, tests/test_git.py::test_status_clean

@@ -7,10 +7,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def load_prompt(name: str) -> str:
+def load(name: str) -> str:
     """Load a prompt markdown file by name."""
     resource = files(__name__).joinpath(f"{name}.md")
     return resource.read_text(encoding="utf-8")
+
+
+load_prompt = load
 
 
 def build_green_prompt(

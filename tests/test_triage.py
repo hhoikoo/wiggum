@@ -1,10 +1,10 @@
-"""Tests for triage_failures() grouping test failures by root cause."""
+"""Tests for triage_failures() and fix_by_triage() grouping and fixing by root cause."""
 
 import threading
 from typing import TYPE_CHECKING
 
 from wiggum.agent import AgentPort, AgentResult
-from wiggum.loop import triage_failures
+from wiggum.loop import fix_by_triage, triage_failures
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -159,3 +159,171 @@ class TestTriageEmptyInput:
         agent = _TriageAgent([])
         triage_failures(test_output="", agent=agent)
         assert len(agent.calls) == 0
+
+
+# =============================================================================
+# fix_by_triage -- dispatches one fix agent per root cause group
+# =============================================================================
+
+
+class _TriageFixAgent:
+    """Agent that handles triage (first call) and fix (subsequent calls)."""
+
+    def __init__(self, groups: Sequence[str]) -> None:
+        self.triage_calls: list[str] = []
+        self.fix_calls: list[str] = []
+        self._lock = threading.Lock()
+        self._triage_response = "\n".join(f"{i + 1}. {g}" for i, g in enumerate(groups))
+        self._call_count = 0
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
+        """Return triage response on first call, fix response on subsequent calls."""
+        with self._lock:
+            self._call_count += 1
+            if self._call_count == 1:
+                self.triage_calls.append(prompt)
+                return AgentResult(stdout=self._triage_response, stderr="", exit_code=0)
+            self.fix_calls.append(prompt)
+            return AgentResult(stdout="fixed", stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+# -- importable ----------------------------------------------------------------
+
+
+class TestFixByTriageImport:
+    """fix_by_triage is importable from wiggum.loop."""
+
+    def test_importable(self) -> None:
+        assert callable(fix_by_triage)
+
+
+# -- return shape --------------------------------------------------------------
+
+
+class TestFixByTriageReturnShape:
+    """fix_by_triage returns a list of AgentResult, one per root cause group."""
+
+    def test_returns_list(self) -> None:
+        groups = ["auth token missing", "db connection failure"]
+        agent = _TriageFixAgent(groups)
+        result = fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert isinstance(result, list)
+
+    def test_elements_are_agent_results(self) -> None:
+        groups = ["auth token missing", "db connection failure"]
+        agent = _TriageFixAgent(groups)
+        result = fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert all(isinstance(r, AgentResult) for r in result)
+
+    def test_one_result_per_root_cause_group(self) -> None:
+        groups = [
+            "TypeError in auth: missing 'token' argument",
+            "ConnectionError in db: cannot reach database",
+            "ValueError in api: invalid schema version",
+        ]
+        agent = _TriageFixAgent(groups)
+        result = fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert len(result) == 3
+
+
+# -- grouping reduces fix agents -----------------------------------------------
+
+
+class TestFixByTriageGrouping:
+    """fix_by_triage launches one fix agent per root cause, not per test failure."""
+
+    def test_five_failures_two_causes_two_fix_calls(self) -> None:
+        groups = [
+            "TypeError in auth module: missing 'token' argument (test_login, test_logout)",
+            "ConnectionError in db module: cannot reach database (test_connect, test_query)",
+        ]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert len(agent.fix_calls) == 2
+
+    def test_same_root_cause_produces_single_fix_call(self) -> None:
+        groups = [
+            "TypeError in auth module: missing 'token' argument (test_login, test_logout, test_refresh)",
+        ]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_SAME_ROOT_CAUSE, agent=agent)
+        assert len(agent.fix_calls) == 1
+
+    def test_three_distinct_causes_three_fix_calls(self) -> None:
+        groups = [
+            "TypeError in auth: missing 'token' argument",
+            "ConnectionError in db: cannot reach database",
+            "ValueError in api: invalid schema version",
+        ]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert len(agent.fix_calls) == 3
+
+
+# -- fix prompts contain root cause descriptions --------------------------------
+
+
+class TestFixByTriagePromptContent:
+    """Each fix agent receives the root cause description in its prompt."""
+
+    def test_fix_prompt_contains_root_cause(self) -> None:
+        groups = [
+            "TypeError in auth: missing 'token' argument",
+            "ConnectionError in db: cannot reach database",
+        ]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert any("TypeError in auth" in p for p in agent.fix_calls)
+        assert any("ConnectionError in db" in p for p in agent.fix_calls)
+
+    def test_fix_prompt_does_not_contain_raw_test_output(self) -> None:
+        groups = ["TypeError in auth: missing 'token' argument"]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_SAME_ROOT_CAUSE, agent=agent)
+        for prompt in agent.fix_calls:
+            assert "FAILED tests/test_auth.py::test_login" not in prompt
+
+
+# -- empty / no-op cases -------------------------------------------------------
+
+
+class TestFixByTriageEmpty:
+    """fix_by_triage with empty input or no root causes does not launch fix agents."""
+
+    def test_empty_test_output_returns_empty(self) -> None:
+        agent = _TriageFixAgent([])
+        result = fix_by_triage(test_output="", agent=agent)
+        assert result == []
+
+    def test_empty_test_output_no_fix_calls(self) -> None:
+        agent = _TriageFixAgent([])
+        fix_by_triage(test_output="", agent=agent)
+        assert len(agent.fix_calls) == 0
+
+    def test_empty_test_output_no_triage_call(self) -> None:
+        agent = _TriageFixAgent([])
+        fix_by_triage(test_output="", agent=agent)
+        assert len(agent.triage_calls) == 0
+
+
+# -- triage is called first ----------------------------------------------------
+
+
+class TestFixByTriageOrdering:
+    """fix_by_triage calls triage before launching fix agents."""
+
+    def test_triage_called_exactly_once(self) -> None:
+        groups = ["auth token missing", "db connection failure"]
+        agent = _TriageFixAgent(groups)
+        fix_by_triage(test_output=_MULTIPLE_DISTINCT_FAILURES, agent=agent)
+        assert len(agent.triage_calls) == 1

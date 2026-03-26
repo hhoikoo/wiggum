@@ -28,7 +28,7 @@ class TestRunSubcommand:
         with (
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
-            patch("wiggum.cli.inner_loop"),
+            patch("wiggum.cli.outer_loop"),
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent"),
         ):
@@ -46,10 +46,10 @@ class TestRunSubcommand:
 
 
 class TestRunWiring:
-    """Tests that run wires startup validation, config, and loop entry."""
+    """Tests that run wires startup validation, config, and outer loop entry."""
 
     def _setup_repo(self, tmp_path):
-        """Create a minimal plan file and .wiggum/config.toml."""
+        """Create a minimal plan file."""
         plan_file = tmp_path / "plan.md"
         plan_file.write_text("# Plan\n\n### Section\n- [ ] item\n")
         return plan_file
@@ -59,7 +59,7 @@ class TestRunWiring:
         with (
             patch("wiggum.cli.validate_startup") as mock_validate,
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
-            patch("wiggum.cli.inner_loop"),
+            patch("wiggum.cli.outer_loop"),
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent"),
         ):
@@ -73,7 +73,7 @@ class TestRunWiring:
         with (
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()) as mock_load,
-            patch("wiggum.cli.inner_loop"),
+            patch("wiggum.cli.outer_loop"),
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent"),
         ):
@@ -82,13 +82,13 @@ class TestRunWiring:
 
         mock_load.assert_called_once_with(tmp_path)
 
-    def test_run_calls_inner_loop_with_correct_args(self, tmp_path):
+    def test_run_calls_outer_loop_with_correct_args(self, tmp_path):
         plan_file = self._setup_repo(tmp_path)
         config = WiggumConfig(batch_size=5)
         with (
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=config),
-            patch("wiggum.cli.inner_loop") as mock_loop,
+            patch("wiggum.cli.outer_loop") as mock_loop,
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent") as mock_agent_cls,
         ):
@@ -109,7 +109,7 @@ class TestRunWiring:
         with (
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
-            patch("wiggum.cli.inner_loop"),
+            patch("wiggum.cli.outer_loop"),
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent"),
         ):
@@ -123,7 +123,7 @@ class TestRunWiring:
         with (
             patch("wiggum.cli.validate_startup"),
             patch("wiggum.cli.load_config", return_value=WiggumConfig()),
-            patch("wiggum.cli.inner_loop"),
+            patch("wiggum.cli.outer_loop"),
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent") as mock_agent_cls,
         ):
@@ -140,7 +140,7 @@ class TestRunWiring:
                 side_effect=SystemExit("Fatal: not a git repository"),
             ),
             patch("wiggum.cli.load_config") as mock_load,
-            patch("wiggum.cli.inner_loop") as mock_loop,
+            patch("wiggum.cli.outer_loop") as mock_loop,
             patch("wiggum.cli.SubprocessGit") as mock_git_cls,
             patch("wiggum.cli.SubprocessAgent"),
         ):
@@ -150,3 +150,18 @@ class TestRunWiring:
 
         mock_load.assert_not_called()
         mock_loop.assert_not_called()
+
+    def test_run_does_not_call_inner_loop_directly(self, tmp_path):
+        plan_file = self._setup_repo(tmp_path)
+        with (
+            patch("wiggum.cli.validate_startup"),
+            patch("wiggum.cli.load_config", return_value=WiggumConfig()),
+            patch("wiggum.cli.outer_loop"),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
+            patch("wiggum.loop.inner_loop") as mock_inner,
+        ):
+            mock_git_cls.return_value.repo_root.return_value = tmp_path
+            app(["run", str(plan_file)], exit_on_error=False)
+
+        mock_inner.assert_not_called()

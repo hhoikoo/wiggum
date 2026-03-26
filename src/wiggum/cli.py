@@ -7,7 +7,7 @@ import cyclopts
 from wiggum.agent.shell import SubprocessAgent
 from wiggum.config import load_config, validate_startup
 from wiggum.git.shell import SubprocessGit
-from wiggum.loop import inner_loop
+from wiggum.outer_loop import outer_loop
 
 app = cyclopts.App(name="wiggum")
 
@@ -26,4 +26,4 @@ def run(plan: Path) -> None:
     config = load_config(repo_root)
     agent = SubprocessAgent(work_dir=repo_root)
 
-    inner_loop(plan_path=plan, agent=agent, git=git, config=config)
+    outer_loop(plan_path=plan, agent=agent, git=git, config=config)

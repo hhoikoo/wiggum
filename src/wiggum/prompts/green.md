@@ -1,6 +1,8 @@
-## Task: Implement (GREEN)
+## Task: Implement Fix (GREEN)
 
-### What to implement
+Working directory: {working_dir}
+
+### What to fix
 
 {tasks}
 

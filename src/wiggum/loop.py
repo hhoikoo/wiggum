@@ -117,6 +117,23 @@ def triage_failures(*, test_output: str, agent: AgentService) -> list[str]:
     return _NUMBERED_ITEM_RE.findall(result.stdout)
 
 
+def fix_by_triage(*, test_output: str, agent: AgentService) -> list[AgentResult]:
+    """Triage failures by root cause, then dispatch one fix agent per group."""
+    if not test_output.strip():
+        return []
+    groups = triage_failures(test_output=test_output, agent=agent)
+    if not groups:
+        return []
+    results: list[AgentResult] = []
+    for group in groups:
+        result = agent.run(
+            prompt=f"Fix the root cause: {group}",
+            allowed_tools=list(_TOOLS_WITH_BASH),
+        )
+        results.append(result)
+    return results
+
+
 def extract_new_todos(output: str) -> list[str]:
     """Parse NEW_TODO lines from agent output."""
     return _NEW_TODO_RE.findall(output)
