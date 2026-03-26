@@ -17,7 +17,7 @@ set -o pipefail
 
 PLAN_FILE="${1:?Usage: $0 <plan.md>}"
 PLAN_FILE="$(cd "$(dirname "$PLAN_FILE")" && pwd)/$(basename "$PLAN_FILE")"
-BATCH_SIZE="${BATCH_SIZE:-3}"
+BATCH_SIZE="${BATCH_SIZE:-10}"
 CYCLE_LIMIT="${CYCLE_LIMIT:-0}"
 MAX_TURNS="${MAX_TURNS:-50}"
 AGENT_TIMEOUT="${AGENT_TIMEOUT:-600}"
@@ -31,14 +31,14 @@ cleanup() { rm -rf "$WORK_DIR"; }
 CHILD_PIDS=()
 
 # Kill all child processes (including running claude -p sessions) on interrupt.
+# Preserves work dir for debugging -- only normal exit cleans up.
 abort() {
-    log "INTERRUPTED -- killing child processes..."
+    printf '\n[ralph] INTERRUPTED -- killing child processes...\n' >&2
     for pid in "${CHILD_PIDS[@]}"; do
         kill "$pid" 2>/dev/null || true
     done
-    # Also kill entire process group as fallback.
-    kill -- -$$ 2>/dev/null || true
-    cleanup
+    printf '[ralph] Work dir preserved: %s\n' "$WORK_DIR" >&2
+    trap - EXIT
     exit 130
 }
 trap abort INT TERM
@@ -81,16 +81,25 @@ count_unchecked() {
 
 mark_checked() {
     local item="$1"
-    # Escape sed special characters in item text.
-    local escaped
-    escaped="$(printf '%s\n' "$item" | sed 's/[[\/.^$*+?()|{}]/\\&/g')"
-    # Replace first occurrence only.
-    sed -i '' "0,/^- \[ \] ${escaped}$/s//- [x] ${escaped}/" "$PLAN_FILE"
+    # Use fixed-string grep to find the line number, then sed by line number.
+    # Avoids regex escaping issues with long items containing special chars.
+    local line_num
+    line_num="$(grep -nF -- "- [ ] $item" "$PLAN_FILE" | head -1 | cut -d: -f1)" || true
+    if [ -n "$line_num" ]; then
+        sed -i '' "${line_num}s/^- \[ \] /- [x] /" "$PLAN_FILE"
+    else
+        log "WARNING: mark_checked failed to find item: ${item:0:60}" >&2
+    fi
 }
 
 append_todo() {
     local item="$1"
-    printf '\n- [ ] %s\n' "$item" >> "$PLAN_FILE"
+    # Ensure the Additional Findings section exists, then append to end of file.
+    # Items always land at the bottom; the outer loop reorganizes them later.
+    if ! grep -q '^### Additional Findings' "$PLAN_FILE"; then
+        printf '\n### Additional Findings\n' >> "$PLAN_FILE"
+    fi
+    printf '%s\n' "- [ ] $item" >> "$PLAN_FILE"
 }
 
 remove_checked() {
@@ -108,10 +117,12 @@ cat > "$PREAMBLE_FILE" << 'PREAMBLE_EOF'
 2. Never expand scope. If you find a gap or issue, output a line starting with NEW_TODO: and move on. Do not attempt to address it.
 3. Fresh context. You have no memory of prior invocations.
 4. Minimal changes. Write the minimum code for the task at hand.
-5. Follow project conventions: Python 3.14+, src layout (src/wiggum/), ruff linting (line-length 88), pyright strict, pytest, uv.
+5. Follow project conventions: Python 3.14+, src layout (src/wiggum/), pyright strict, pytest, uv.
 6. Use `uv run` for all tool invocations (ruff, pytest, pyright).
-7. Do not add docstrings, comments, or type annotations beyond what is needed for the change.
-8. ASCII only in code and comments.
+7. All public classes, methods, and functions must have a one-line docstring.
+8. Imports used only in type annotations must be inside `if TYPE_CHECKING:` blocks.
+9. Use modern Python syntax: PEP 695 type parameters, not TypeVar.
+10. ASCII only in code and comments.
 PREAMBLE_EOF
 
 # --------------------------------------------------------------------------- #
@@ -132,25 +143,24 @@ claude_run() {
     local prompt="$1"
     local label="${2:-agent}"
     local tools="${3:-}"
-    log "Invoking: $label"
+    log "Invoking: $label" >&2
     local flags=("${CLAUDE_BASE_FLAGS[@]}")
     if [ -n "$tools" ]; then
         flags+=(--tools "$tools")
     fi
-    local out_tmp="${WORK_DIR}/run_$$.out"
+    local out_tmp="${WORK_DIR}/run_${RANDOM}.out"
     timeout "$AGENT_TIMEOUT" claude -p "$prompt" "${flags[@]}" > "$out_tmp" 2>>"$LOG_FILE" &
     local pid=$!
     CHILD_PIDS+=("$pid")
     wait "$pid" || {
         local rc=$?
         if [ "$rc" -eq 124 ]; then
-            log "TIMEOUT after ${AGENT_TIMEOUT}s: $label"
+            log "TIMEOUT after ${AGENT_TIMEOUT}s: $label" >&2
         fi
-        cat "$out_tmp" 2>/dev/null
         rm -f "$out_tmp"
         return "$rc"
     }
-    cat "$out_tmp" 2>/dev/null
+    cat "$out_tmp"
     rm -f "$out_tmp"
 }
 
@@ -177,6 +187,11 @@ harvest_todos() {
     for f in $glob_pattern; do
         [ -f "$f" ] || continue
         grep '^NEW_TODO: ' "$f" 2>/dev/null | sed 's/^NEW_TODO: //' | while IFS= read -r todo; do
+            # Skip if this TODO (or something very similar) already exists in the plan.
+            if grep -qF -- "${todo:0:60}" "$PLAN_FILE" 2>/dev/null; then
+                log "Skipping duplicate TODO: ${todo:0:60}..."
+                continue
+            fi
             log "Discovered TODO: $todo"
             append_todo "$todo"
         done
@@ -190,6 +205,9 @@ harvest_todos() {
 run_checks() {
     local tag="$1"
     phase_start "Running checks ($tag)..."
+
+    # Refresh editable install so newly created modules are importable.
+    (cd "$PROJECT_DIR" && uv sync --quiet) 2>/dev/null || true
 
     local lint_out="${WORK_DIR}/lint_${tag}.out"
     local test_out="${WORK_DIR}/test_${tag}.out"
@@ -212,42 +230,176 @@ run_checks() {
 # --------------------------------------------------------------------------- #
 
 outer_loop() {
-    phase_start "=== OUTER LOOP: recalibrating plan ==="
+    log "=== OUTER LOOP ==="
 
     local plan_content
     plan_content="$(cat "$PLAN_FILE")"
+    local has_checked=false
+    local verify_out="${WORK_DIR}/verify_checked.out"
+    local gaps_out="${WORK_DIR}/find_gaps.out"
 
-    local recalibrated
-    recalibrated="$(claude_run "$(cat <<EOF
-## Task: Recalibrate Implementation Plan
+    local checked
+    checked="$(grep '^- \[x\] ' "$PLAN_FILE" | sed 's/^- \[x\] //' || true)"
+    local unchecked_items
+    unchecked_items="$(get_unchecked)"
+
+    # Skip gap scan on cycle 1 -- plan is hand-written and there's no code
+    # to compare against yet. Inner loop NEW_TODO discovery handles gaps.
+    local run_gaps=false
+    if [ "$cycle" -gt 1 ]; then
+        run_gaps=true
+    fi
+
+    # Launch agents in parallel where applicable.
+    if [ -n "$checked" ]; then
+        has_checked=true
+        if [ "$run_gaps" = true ]; then
+            phase_start "OUTER: verifying checked items + scanning for gaps (parallel)..."
+        else
+            phase_start "OUTER: verifying checked items..."
+        fi
+        claude_bg "$(cat <<EOF
+## Task: Verify Completed Items
 
 Working directory: $PROJECT_DIR
-Plan file: $PLAN_FILE
 
-### Current plan contents
+### Checked items to verify
+
+$checked
+
+### Instructions
+
+For each item above, check the codebase to confirm it is actually implemented. If an item is NOT implemented (missing code, stub only, or partially done), output it on its own line. Output NOTHING else -- no commentary, no preamble. If all items are truly done, output the single word NONE.
+EOF
+        )" "$verify_out" "verify-checked"
+        local verify_pid=$!
+    else
+        log "OUTER: no checked items to verify."
+        if [ "$run_gaps" = true ]; then
+            phase_start "OUTER: scanning for gaps..."
+        fi
+    fi
+
+    local gaps_pid=""
+    if [ "$run_gaps" = true ]; then
+        # List recently changed files so the agent can focus its search
+        # instead of reading the entire codebase.
+        local recent_files
+        recent_files="$(cd "$PROJECT_DIR" && git diff --name-only HEAD~3 HEAD -- src/ 2>/dev/null || echo '(none)')"
+
+        claude_bg "$(cat <<EOF
+## Task: Find Missing Plan Items
+
+Working directory: $PROJECT_DIR
+
+### Current plan (unchecked items only)
+
+$unchecked_items
+
+### Recently changed source files
+
+$recent_files
+
+### Instructions
+
+Check the recently changed files above. Identify ONLY items that are required to make the existing plan items work but are missing from the plan. For example: a missing __init__.py that blocks imports, a missing dependency in pyproject.toml, or a function that existing plan items depend on but nobody creates.
+
+Do NOT add:
+- Edge cases, error handling, or hardening
+- Nice-to-haves or improvements to existing code
+- Items that duplicate or overlap with existing plan items
+- Items that the inner loop agents can discover on their own via NEW_TODO
+
+Do NOT do a full codebase scan. Focus only on the recently changed files.
+
+Output at most 3 items. Output each as: - [ ] <description>
+Output NOTHING else -- no commentary, no preamble, no code fences. If nothing is blocking, output the single word NONE.
+EOF
+        )" "$gaps_out" "find-gaps"
+        gaps_pid=$!
+    else
+        log "OUTER: skipping gap scan (cycle 1)."
+    fi
+
+    # Wait for agents.
+    if [ "$has_checked" = true ]; then
+        wait "$verify_pid" 2>/dev/null || true
+        log "OUTER: verify-checked done."
+    fi
+    if [ -n "$gaps_pid" ]; then
+        wait "$gaps_pid" 2>/dev/null || true
+        log "OUTER: find-gaps done."
+    fi
+
+    # Process verify results.
+    if [ "$has_checked" = true ] && [ -f "$verify_out" ]; then
+        local unchecks
+        unchecks="$(sed '/^```/d; /^[[:space:]]*$/d' "$verify_out")"
+        if [ -n "$unchecks" ] && ! echo "$unchecks" | grep -qi '^NONE$'; then
+            echo "$unchecks" | while IFS= read -r item; do
+                [ -z "$item" ] && continue
+                local escaped
+                escaped="$(printf '%s\n' "$item" | sed 's/[[\/.^$*+?()|{}]/\\&/g')"
+                sed -i '' "s/^- \[x\] ${escaped}$/- [ ] ${escaped}/" "$PLAN_FILE"
+            done
+            log "OUTER: unchecked items not yet implemented."
+        else
+            log "OUTER: all checked items verified."
+        fi
+    fi
+
+    # Process gap results.
+    if [ -f "$gaps_out" ]; then
+        local gaps
+        gaps="$(sed '/^```/d; /^[[:space:]]*$/d' "$gaps_out")"
+        if [ -n "$gaps" ] && ! echo "$gaps" | grep -qi '^NONE$'; then
+            echo "$gaps" | grep '^- \[ \] ' | sed 's/^- \[ \] //' | while IFS= read -r item; do
+                [ -z "$item" ] && continue
+                append_todo "$item"
+            done
+            log "OUTER: added new items to plan."
+        else
+            log "OUTER: no gaps found."
+        fi
+    fi
+
+    # Step 3: Reorganize Additional Findings into proper headings.
+    if grep -q '^### Additional Findings' "$PLAN_FILE"; then
+        local findings
+        findings="$(sed -n '/^### Additional Findings$/,$ { /^### Additional Findings$/d; /^[[:space:]]*$/d; p; }' "$PLAN_FILE")"
+        if [ -n "$findings" ]; then
+            phase_start "OUTER: reorganizing additional findings..."
+            local reorg_out="${WORK_DIR}/reorganize.out"
+            plan_content="$(cat "$PLAN_FILE")"
+            claude_run "$(cat <<EOF
+## Task: Reorganize Plan Items
+
+### Current plan
 
 $plan_content
 
 ### Instructions
 
-1. Read the codebase to see what is already implemented.
-2. Items marked [x]: verify truly done in the code. If NOT done, uncheck them.
-3. Unchecked items: verify still relevant and correctly scoped.
-4. Identify MISSING items that the plan should include.
-5. Re-sort all unchecked items by priority (most important / foundational first).
-6. Output the COMPLETE updated plan.md content. Nothing else.
+The plan has a section called "### Additional Findings" at the bottom with items that were discovered during implementation. Move each item to the most appropriate existing section heading. If no existing heading fits, create a new ### heading for it. If still unclear, place it under ### Miscellaneous.
 
-No commentary, no code fences, no preamble. Raw markdown only.
+Remove the ### Additional Findings section entirely after relocating all items.
+
+Output the COMPLETE updated plan. No commentary, no code fences, no preamble.
 EOF
-    )" "recalibrate")"
+            )" "reorganize" > "$reorg_out"
 
-    if echo "$recalibrated" | grep -q '^- \[[ x]\] '; then
-        echo "$recalibrated" > "$PLAN_FILE"
-        remove_checked
-        phase_end "Plan recalibrated. $(count_unchecked) items remain."
-    else
-        phase_end "WARNING: recalibration output invalid, keeping current plan."
+            local reorg
+            reorg="$(sed '/^```/d; /^[[:space:]]*$/{ 1d; }' "$reorg_out")"
+            if echo "$reorg" | grep -q '^- \[[ x]\] '; then
+                echo "$reorg" > "$PLAN_FILE"
+                phase_end "Reorganized findings into plan sections."
+            else
+                phase_end "WARNING: reorganization output invalid, keeping current plan."
+            fi
+        fi
     fi
+
+    log "$(count_unchecked) items remaining after outer loop."
 }
 
 # --------------------------------------------------------------------------- #
@@ -269,7 +421,8 @@ select_items() {
         return 0
     fi
 
-    claude_run "$(cat <<EOF
+    local raw
+    raw="$(claude_run "$(cat <<EOF
 Select the $BATCH_SIZE most important items to implement next from the list below.
 Consider dependencies: foundational/infrastructure items before features that depend on them.
 
@@ -279,7 +432,29 @@ $items
 Output ONLY the selected items, one per line, exactly as listed above.
 No numbering, no bullets, no commentary.
 EOF
-    )" "select priorities"
+    )" "select priorities")"
+
+    # Match model output to actual plan items. The model may truncate or
+    # rephrase, so match if the output line is a substring of a plan item
+    # or vice versa. Emit the canonical plan item, not the model's version.
+    echo "$raw" | while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        # Try exact match first.
+        if echo "$items" | grep -qFx -- "$line"; then
+            echo "$line"
+            continue
+        fi
+        # Fuzzy: find a plan item that contains the model's line or that
+        # the model's line contains. Use first 60 chars as search key.
+        local key="${line:0:60}"
+        local match
+        match="$(echo "$items" | grep -F -- "$key" | head -1)" || true
+        if [ -n "$match" ]; then
+            echo "$match"
+        else
+            log "  WARNING: no plan item matched: ${line:0:80}" >&2
+        fi
+    done
 }
 
 # --------------------------------------------------------------------------- #
@@ -310,7 +485,7 @@ $item
 2. Write pytest test(s) that FAIL because the described behavior does not exist yet.
 3. Place tests under tests/ mirroring the src/wiggum/ structure.
 4. Do NOT implement the feature. Only write tests.
-5. If you find gaps, output: NEW_TODO: <description>
+5. Only output NEW_TODO: for missing dependencies YOUR item needs. Do NOT report issues in unrelated modules.
 EOF
         )" "${WORK_DIR}/red_${i}.out" "RED[${item:0:50}]" "$red_tools"
         pids+=($!)
@@ -329,11 +504,7 @@ EOF
 green_phase() {
     phase_start "--- GREEN PHASE: implementing fixes ---"
 
-    # Tools restricted: no Bash = cannot run tests.
-    local green_tools="Read,Write,Edit,Glob,Grep"
-
-    local test_output
-    test_output="$(tail -200 "${WORK_DIR}/test_red.out" 2>/dev/null || echo '(no test output)')"
+    local green_tools="Read,Write,Edit,Glob,Grep,Bash"
 
     local i=0
     for item in "$@"; do
@@ -346,17 +517,15 @@ Working directory: $PROJECT_DIR
 
 $item
 
-### Recent test output (for context)
-
-$test_output
-
 ### Instructions
 
 1. Read the failing tests for this item.
 2. Write the MINIMUM code to make those tests pass.
-3. Do NOT write new tests.
-4. Do NOT refactor unrelated code.
-5. If you find gaps, output: NEW_TODO: <description>
+3. Run \`uv run ruff check --fix --unsafe-fixes\` on files you changed and fix any remaining lint errors.
+4. Run \`uv run pytest\` to verify your changes pass. If tests fail, fix your code and re-run until all tests pass. Ignore pre-existing failures unrelated to your item.
+5. Do NOT write new tests.
+6. Do NOT refactor unrelated code.
+7. Only output NEW_TODO: for gaps directly caused by YOUR item. Do NOT report pre-existing test failures or issues in unrelated modules.
 EOF
         )" "GREEN[${item:0:50}]" "$green_tools" > "${WORK_DIR}/green_${i}.out"
         harvest_todos "${WORK_DIR}/green_${i}.out"
@@ -367,45 +536,16 @@ EOF
 }
 
 # --------------------------------------------------------------------------- #
-# Commit -- direct git, no AI overhead
+# Commit -- delegate to /commit skill via claude -p
 # --------------------------------------------------------------------------- #
 
 do_commit() {
-    log "Committing changes..."
-    cd "$PROJECT_DIR" || return 1
-
-    git add -A
-
-    # Build a commit message from the completed items.
-    local body=""
-    for item in "$@"; do
-        body="${body}- ${item}"$'\n'
-    done
-
-    local subject
-    subject="feat: implement $(echo "$1" | tr '[:upper:]' '[:lower:]' | cut -c1-60)"
-
-    if ! git commit -m "$(cat <<EOF
-$subject
-
-$body
-EOF
-    )"; then
-        log "Pre-commit hook failed, running auto-fix..."
-        uv run ruff check --fix src/ tests/ 2>/dev/null || true
-        uv run ruff format src/ tests/ 2>/dev/null || true
-        git add -A
-        git commit -m "$(cat <<EOF
-$subject
-
-$body
-EOF
-        )" || {
-            log "Commit failed after auto-fix. Continuing anyway."
-            return 0
-        }
-    fi
-
+    log "Committing via /commit skill..."
+    (cd "$PROJECT_DIR" && git add -A)
+    claude_run "/commit" "commit" >> "$LOG_FILE" || {
+        log "Commit skill failed (rc=$?). Continuing."
+        return 0
+    }
     log "Committed."
 }
 
@@ -426,7 +566,8 @@ inner_loop() {
     done <<< "$selection"
 
     if [ "${#items[@]}" -eq 0 ]; then
-        log "No items selected."
+        log "No items matched. Raw select output was:"
+        echo "$selection" | head -10 | while IFS= read -r l; do log "  | $l"; done
         return 1
     fi
 
@@ -446,22 +587,28 @@ inner_loop() {
     # GREEN: implement fixes (sequential to avoid codebase conflicts).
     green_phase "${items[@]}"
 
-    # Auto-fix lint before testing.
-    (cd "$PROJECT_DIR" && uv run ruff check --fix src/ tests/ 2>/dev/null || true)
-    (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
+    # Fix loop: auto-fix lint, run checks, remediate if failing, repeat.
+    local max_fix_attempts=3
+    local attempt=0
+    local checks_passed=false
 
-    # Test gate after GREEN: expect all pass.
-    if run_checks "green"; then
-        log "All checks pass after GREEN."
-        for item in "${items[@]}"; do mark_checked "$item"; done
-        do_commit "${items[@]}"
-    else
-        log "Checks still failing after GREEN."
-        # Attempt a single remediation pass.
+    while [ "$attempt" -lt "$max_fix_attempts" ]; do
+        ((attempt++))
+
+        (cd "$PROJECT_DIR" && uv run ruff check --fix --unsafe-fixes src/ tests/ 2>/dev/null || true)
+        (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
+
+        if run_checks "fix_${attempt}"; then
+            checks_passed=true
+            break
+        fi
+
+        log "Checks failing (attempt $attempt/$max_fix_attempts). Remediating..."
+
         local test_failures
-        test_failures="$(tail -100 "${WORK_DIR}/test_green.out" 2>/dev/null || echo '(no output)')"
+        test_failures="$(tail -100 "${WORK_DIR}/test_fix_${attempt}.out" 2>/dev/null || echo '(no output)')"
         local lint_failures
-        lint_failures="$(tail -50 "${WORK_DIR}/lint_green.out" 2>/dev/null || echo '(no output)')"
+        lint_failures="$(tail -50 "${WORK_DIR}/lint_fix_${attempt}.out" 2>/dev/null || echo '(no output)')"
 
         claude_run "$(cat <<EOF
 ## Task: Fix Remaining Failures
@@ -480,26 +627,24 @@ $lint_failures
 
 1. Read the failing test output and lint errors.
 2. Fix ALL failures. Make all tests pass and lint clean.
-3. If a fix requires broader changes, output: NEW_TODO: <description>
+3. Run \`uv run ruff check --fix --unsafe-fixes\` on changed files.
+4. Do NOT run pytest -- the harness runs tests.
+5. If a fix requires broader changes, output: NEW_TODO: <description>
 EOF
-        )" "REMEDIATE" "Read,Write,Edit,Glob,Grep" > "${WORK_DIR}/remediate.out"
-        harvest_todos "${WORK_DIR}/remediate.out"
+        )" "REMEDIATE[$attempt]" > "${WORK_DIR}/remediate_${attempt}.out"
+        harvest_todos "${WORK_DIR}/remediate_${attempt}.out"
+    done
 
-        # Auto-fix lint again.
-        (cd "$PROJECT_DIR" && uv run ruff check --fix src/ tests/ 2>/dev/null || true)
-        (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
-
-        if run_checks "remediate"; then
-            log "Remediation succeeded."
-            for item in "${items[@]}"; do mark_checked "$item"; done
-            do_commit "${items[@]}"
-        else
-            log "Remediation failed. Appending fix TODO."
-            append_todo "FIX: checks still failing -- see ${WORK_DIR}/test_remediate.out"
-            # Commit partial progress.
-            do_commit "${items[@]}"
-        fi
+    if [ "$checks_passed" = true ]; then
+        log "All checks pass."
+        for item in "${items[@]}"; do mark_checked "$item"; done
+    else
+        log "Checks still failing after $max_fix_attempts attempts."
+        append_todo "FIX: checks still failing -- see ${WORK_DIR}/test_fix_${attempt}.out"
     fi
+
+    # Commit progress regardless (partial or complete).
+    do_commit "${items[@]}"
 }
 
 # --------------------------------------------------------------------------- #
