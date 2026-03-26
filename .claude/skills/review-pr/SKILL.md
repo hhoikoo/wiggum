@@ -29,7 +29,7 @@ Address review comments on a pull request.
 ### 2. Fetch Review Comments
 
 ```bash
-$CLAUDE_PROJECT_DIR/.claude/scripts/pr-fetch-comments.sh {number}
+.claude/scripts/pr-fetch-comments.sh {number}
 ```
 
 ### 3. Triage Each Comment
@@ -64,8 +64,8 @@ gh api repos/{owner}/{repo}/pulls/{number}/comments/{comment_id}/replies -f body
 Fetch unresolved thread IDs, then resolve them:
 
 ```bash
-$CLAUDE_PROJECT_DIR/.claude/scripts/pr-fetch-threads.sh {number}
-$CLAUDE_PROJECT_DIR/.claude/scripts/pr-resolve-thread.sh {thread_id} [{thread_id}...]
+.claude/scripts/pr-fetch-threads.sh {number}
+.claude/scripts/pr-resolve-thread.sh {thread_id} [{thread_id}...]
 ```
 
 ### 6. Output Summary

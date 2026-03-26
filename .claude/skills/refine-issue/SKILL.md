@@ -26,7 +26,7 @@ Takes an existing ticket and rewrites its summary and description so it is detai
 
 1. Fetch the existing ticket using:
    ```bash
-   $CLAUDE_PROJECT_DIR/.claude/scripts/issue-view.sh ISSUE_KEY
+   .claude/scripts/issue-view.sh ISSUE_KEY
    ```
    Extract the current summary, description, issue type, status, and any linked issues.
 2. Research the codebase: scan relevant modules, architecture, conventions, and dependencies based on what the ticket describes. Use Glob, Grep, Read to understand the affected areas.
@@ -58,7 +58,7 @@ Takes an existing ticket and rewrites its summary and description so it is detai
 
 11. Update the ticket:
     ```bash
-    $CLAUDE_PROJECT_DIR/.claude/scripts/issue-edit.sh ISSUE_KEY -s "<refined-summary>" -b <body-file>
+    .claude/scripts/issue-edit.sh ISSUE_KEY -s "<refined-summary>" -b <body-file>
     ```
     If only the description changed (summary is fine), omit `-s`.
 
