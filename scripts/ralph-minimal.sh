@@ -17,7 +17,7 @@ set -o pipefail
 
 PLAN_FILE="${1:?Usage: $0 <plan.md>}"
 PLAN_FILE="$(cd "$(dirname "$PLAN_FILE")" && pwd)/$(basename "$PLAN_FILE")"
-BATCH_SIZE="${BATCH_SIZE:-10}"
+BATCH_SIZE="${BATCH_SIZE:-5}"
 CYCLE_LIMIT="${CYCLE_LIMIT:-0}"
 MAX_TURNS="${MAX_TURNS:-50}"
 AGENT_TIMEOUT="${AGENT_TIMEOUT:-600}"
