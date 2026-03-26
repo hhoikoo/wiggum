@@ -1,7 +1,17 @@
+from importlib.metadata import entry_points
+
 import cyclopts
 import pytest
 
 from wiggum.cli import app
+
+
+class TestEntryPoint:
+    def test_wiggum_console_script_registered(self):
+        eps = entry_points(group="console_scripts", name="wiggum")
+        assert len(eps) == 1
+        ep = next(iter(eps))
+        assert ep.value == "wiggum.cli:app"
 
 
 class TestAppInstance:

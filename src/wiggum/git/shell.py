@@ -1,13 +1,12 @@
 """Subprocess-based git adapter."""
 
 import subprocess
+from collections.abc import (
+    Sequence,  # noqa: TC003 - needed at runtime for inspect.signature
+)
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from wiggum.git.models import LogEntry, StatusEntry
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 _RECORD_SEP = "---RECORD---"
 
@@ -88,7 +87,7 @@ class ShellGitAdapter:
             entries.append(LogEntry(message=message, hash=hash_))
         return entries
 
-    def add(self, *paths: str) -> None:
+    def add(self, paths: Sequence[str]) -> None:
         """Stage files for commit."""
         self._run("add", *paths)
 

@@ -1,9 +1,11 @@
 """Git port protocol defining the interface for git operations."""
 
+from collections.abc import (
+    Sequence,  # noqa: TC003 -- needed at runtime for @runtime_checkable
+)
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from pathlib import Path
 
     from wiggum.git.models import LogEntry, StatusEntry

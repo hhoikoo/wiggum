@@ -124,13 +124,12 @@ class TestLog:
 
 
 class TestAdd:
-    def test_add_stages_file(self, git_repo: Path):
+    def test_add_stages_file_with_sequence(self, git_repo: Path):
         from wiggum.git.shell import ShellGitAdapter
 
         (git_repo / "staged.txt").write_text("stage me")
         adapter = ShellGitAdapter(repo_path=git_repo)
-        adapter.add("staged.txt")
-        # verify file is staged via git status --porcelain
+        adapter.add(["staged.txt"])
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=git_repo,
@@ -140,13 +139,13 @@ class TestAdd:
         )
         assert "A  staged.txt" in result.stdout
 
-    def test_add_stages_multiple_files(self, git_repo: Path):
+    def test_add_stages_multiple_files_with_sequence(self, git_repo: Path):
         from wiggum.git.shell import ShellGitAdapter
 
         (git_repo / "a.txt").write_text("a")
         (git_repo / "b.txt").write_text("b")
         adapter = ShellGitAdapter(repo_path=git_repo)
-        adapter.add("a.txt", "b.txt")
+        adapter.add(["a.txt", "b.txt"])
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=git_repo,
@@ -156,6 +155,25 @@ class TestAdd:
         )
         assert "A  a.txt" in result.stdout
         assert "A  b.txt" in result.stdout
+
+    def test_add_signature_matches_git_port(self, git_repo: Path):
+        from wiggum.git.port import GitPort
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        port_add = GitPort.add
+        adapter_add = adapter.add
+        # Protocol requires (self, paths: Sequence[str]) -> None
+        # Verify parameter count matches (self + paths = 2 on unbound method)
+        import inspect
+
+        _port_params = list(inspect.signature(port_add).parameters)
+        adapter_params = list(inspect.signature(adapter_add).parameters)
+        # Bound method: port has ['self', 'paths'], adapter bound has ['paths']
+        assert "paths" in adapter_params
+        sig = inspect.signature(adapter_add)
+        param = sig.parameters["paths"]
+        assert param.kind != inspect.Parameter.VAR_POSITIONAL
 
 
 class TestRepoRoot:

@@ -4,7 +4,15 @@ import textwrap
 
 import pytest
 
-from wiggum.plan import Plan, PlanItem, count_unchecked, get_unchecked, parse_plan
+from wiggum.plan import (
+    Plan,
+    PlanItem,
+    append_todo,
+    count_unchecked,
+    get_unchecked,
+    mark_checked,
+    parse_plan,
+)
 
 SIMPLE_PLAN = textwrap.dedent("""\
     # Phase 1: Core Ralph Loop
@@ -264,3 +272,154 @@ class TestCountUnchecked:
     def test_consistent_with_get_unchecked(self) -> None:
         plan = parse_plan(MIXED_PLAN)
         assert count_unchecked(plan) == len(get_unchecked(plan))
+
+
+PLAN_WITH_FINDINGS = textwrap.dedent("""\
+    # Phase 1
+
+    ### Build
+    - [x] Set up project
+
+    ### Additional Findings
+    - [ ] Existing finding
+""")
+
+PLAN_WITHOUT_FINDINGS = textwrap.dedent("""\
+    # Phase 1
+
+    ### Build
+    - [x] Set up project
+    - [ ] Add dependencies
+""")
+
+
+ADDITIONAL_FINDINGS_TITLE = "Additional Findings"
+
+
+class TestAppendTodo:
+    """Tests for append_todo adding items under Additional Findings."""
+
+    def test_appends_to_existing_findings_section(self) -> None:
+        result = append_todo(PLAN_WITH_FINDINGS, "New finding")
+        plan = parse_plan(result)
+        findings = [s for s in plan.sections if s.title == ADDITIONAL_FINDINGS_TITLE]
+        assert len(findings) == 1
+        descriptions = [item.description for item in findings[0].items]
+        assert "Existing finding" in descriptions
+        assert "New finding" in descriptions
+
+    def test_creates_findings_section_when_missing(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "Discovered issue")
+        plan = parse_plan(result)
+        findings = [s for s in plan.sections if s.title == ADDITIONAL_FINDINGS_TITLE]
+        assert len(findings) == 1
+        assert findings[0].items[0].description == "Discovered issue"
+
+    def test_appended_item_is_unchecked(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "Some todo")
+        plan = parse_plan(result)
+        findings = [s for s in plan.sections if s.title == ADDITIONAL_FINDINGS_TITLE]
+        assert findings[0].items[0].checked is False
+
+    def test_preserves_existing_sections(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "New finding")
+        plan = parse_plan(result)
+        build = [s for s in plan.sections if s.title == "Build"]
+        assert len(build) == 1
+        assert len(build[0].items) == 2
+
+    def test_preserves_plan_title(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "New finding")
+        plan = parse_plan(result)
+        assert plan.title == "Phase 1"
+
+    def test_multiple_appends_accumulate(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "First")
+        result = append_todo(result, "Second")
+        plan = parse_plan(result)
+        findings = [s for s in plan.sections if s.title == ADDITIONAL_FINDINGS_TITLE]
+        descriptions = [item.description for item in findings[0].items]
+        assert descriptions == ["First", "Second"]
+
+    def test_does_not_duplicate_findings_section(self) -> None:
+        result = append_todo(PLAN_WITH_FINDINGS, "Another")
+        plan = parse_plan(result)
+        findings = [s for s in plan.sections if s.title == ADDITIONAL_FINDINGS_TITLE]
+        assert len(findings) == 1
+
+    def test_result_is_valid_markdown(self) -> None:
+        result = append_todo(PLAN_WITHOUT_FINDINGS, "Check this")
+        assert "- [ ] Check this" in result
+
+
+class TestMarkChecked:
+    """Tests for mark_checked flipping [ ] to [x]."""
+
+    def test_marks_unchecked_item(self) -> None:
+        result = mark_checked(SINGLE_ITEM_PLAN, "Install dependencies")
+        assert "- [x] Install dependencies" in result
+
+    def test_original_unchecked_marker_removed(self) -> None:
+        result = mark_checked(SINGLE_ITEM_PLAN, "Install dependencies")
+        assert "- [ ] Install dependencies" not in result
+
+    def test_only_marks_matching_item(self) -> None:
+        result = mark_checked(ALL_UNCHECKED_PLAN, "Task A")
+        plan = parse_plan(result)
+        task_a = [
+            item
+            for section in plan.sections
+            for item in section.items
+            if item.description == "Task A"
+        ]
+        task_b = [
+            item
+            for section in plan.sections
+            for item in section.items
+            if item.description == "Task B"
+        ]
+        assert task_a[0].checked is True
+        assert task_b[0].checked is False
+
+    def test_preserves_other_sections(self) -> None:
+        result = mark_checked(ALL_UNCHECKED_PLAN, "Task A")
+        plan = parse_plan(result)
+        test_section = [s for s in plan.sections if s.title == "Test"]
+        assert len(test_section) == 1
+        assert test_section[0].items[0].checked is False
+
+    def test_preserves_plan_title(self) -> None:
+        result = mark_checked(
+            SIMPLE_PLAN, "Add cyclopts and pydantic to project dependencies"
+        )
+        plan = parse_plan(result)
+        assert plan.title == "Phase 1: Core Ralph Loop"
+
+    def test_preserves_already_checked_items(self) -> None:
+        result = mark_checked(
+            SIMPLE_PLAN, "Add cyclopts and pydantic to project dependencies"
+        )
+        plan = parse_plan(result)
+        checked_descriptions = [
+            item.description
+            for section in plan.sections
+            for item in section.items
+            if item.checked
+        ]
+        assert "Set up project structure" in checked_descriptions
+
+    def test_raises_on_missing_item(self) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            mark_checked(SIMPLE_PLAN, "Nonexistent task")
+
+    def test_raises_on_already_checked_item(self) -> None:
+        with pytest.raises(ValueError, match="already checked"):
+            mark_checked(SIMPLE_PLAN, "Set up project structure")
+
+    def test_roundtrip_with_parse_plan(self) -> None:
+        result = mark_checked(MIXED_PLAN, "Pending task A")
+        plan = parse_plan(result)
+        unchecked = get_unchecked(plan)
+        descriptions = [item.description for item in unchecked]
+        assert "Pending task A" not in descriptions
+        assert "Pending task B" in descriptions

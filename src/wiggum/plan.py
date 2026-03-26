@@ -76,3 +76,47 @@ def get_unchecked(plan: Plan) -> list[PlanItem]:
 def count_unchecked(plan: Plan) -> int:
     """Return the number of unchecked items across all sections."""
     return len(get_unchecked(plan))
+
+
+_ADDITIONAL_FINDINGS_HEADER = "### Additional Findings"
+
+
+def append_todo(text: str, description: str) -> str:
+    """Add an unchecked item under the Additional Findings section."""
+    new_item = f"- [ ] {description}"
+
+    if _ADDITIONAL_FINDINGS_HEADER in text:
+        lines = text.splitlines(keepends=True)
+        insert_idx = len(lines)
+        in_section = False
+        for i, line in enumerate(lines):
+            if line.strip() == _ADDITIONAL_FINDINGS_HEADER:
+                in_section = True
+                continue
+            if in_section:
+                if line.strip().startswith("### "):
+                    insert_idx = i
+                    break
+                if _ITEM_RE.match(line.strip()):
+                    insert_idx = i + 1
+        lines.insert(insert_idx, new_item + "\n")
+        return "".join(lines)
+
+    stripped = text.rstrip("\n")
+    return f"{stripped}\n\n{_ADDITIONAL_FINDINGS_HEADER}\n{new_item}\n"
+
+
+def mark_checked(text: str, description: str) -> str:
+    """Flip a specific item from [ ] to [x] in plan markdown."""
+    unchecked_target = f"- [ ] {description}"
+    checked_target = f"- [x] {description}"
+
+    if checked_target in text or f"- [X] {description}" in text:
+        msg = f"Item already checked: {description}"
+        raise ValueError(msg)
+
+    if unchecked_target not in text:
+        msg = f"Item not found: {description}"
+        raise ValueError(msg)
+
+    return text.replace(unchecked_target, checked_target, 1)
