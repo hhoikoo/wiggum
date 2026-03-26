@@ -1,12 +1,15 @@
 """Inner-loop orchestration: red, green, check, fix, and commit."""
 
 import dataclasses
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 from wiggum.checks import run_checks as _run_checks
 from wiggum.plan import get_unchecked, mark_checked, parse_plan
 from wiggum.priority import select_items
+
+_NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+(.+)$", re.MULTILINE)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -58,6 +61,14 @@ def fix_loop(*, agent: AgentPort, check: Callable[[], CheckResult]) -> CheckResu
         agent.run(prompt=f"Fix the following check failures:\n\n{result.output}")
         result = check()
     return result
+
+
+def find_gaps(*, plan_text: str, agent: AgentPort) -> list[str]:
+    """Identify missing plan items via agent."""
+    result = agent.run(
+        prompt=f"Review this plan and list any missing items as a numbered list:\n\n{plan_text}",
+    )
+    return _NUMBERED_ITEM_RE.findall(result.stdout)
 
 
 def inner_loop(

@@ -10,6 +10,7 @@ from wiggum.git import GitPort
 from wiggum.loop import (
     MAX_FIX_ATTEMPTS,
     CheckResult,
+    find_gaps,
     fix_loop,
     green_phase,
     inner_loop,
@@ -741,4 +742,118 @@ class TestInnerLoopProtocol:
 
     def test_inner_loop_agent_is_agent_port(self) -> None:
         agent = _InnerLoopAgent([])
+        assert isinstance(agent, AgentPort)
+
+
+# -- find_gaps fakes ----------------------------------------------------------
+
+_GAPS_PLAN_TEXT = """\
+# Test Plan
+
+### Auth
+- [x] Add login endpoint
+- [ ] Add logout endpoint
+
+### Database
+- [x] Create users table
+"""
+
+
+class _GapsAgent:
+    """Agent that returns a canned numbered list of gap descriptions."""
+
+    def __init__(self, gaps: Sequence[str]) -> None:
+        self.calls: list[str] = []
+        self._response = "\n".join(f"{i + 1}. {g}" for i, g in enumerate(gaps))
+
+    def run(self, *, prompt: str, system_prompt: str | None = None) -> AgentResult:
+        """Record the call and return the canned response."""
+        self.calls.append(prompt)
+        return AgentResult(stdout=self._response, stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+# -- find_gaps: import --------------------------------------------------------
+
+
+class TestFindGapsImport:
+    """find_gaps is importable from wiggum.loop."""
+
+    def test_importable(self) -> None:
+        from wiggum.loop import find_gaps
+
+        assert callable(find_gaps)
+
+
+# -- find_gaps: return shape --------------------------------------------------
+
+
+class TestFindGapsReturnShape:
+    """find_gaps returns a list of strings."""
+
+    def test_returns_list(self) -> None:
+        agent = _GapsAgent(["Add password reset"])
+        result = find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert isinstance(result, list)
+
+    def test_elements_are_strings(self) -> None:
+        agent = _GapsAgent(["Add password reset", "Add rate limiting"])
+        result = find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert all(isinstance(item, str) for item in result)
+
+    def test_returns_one_entry_per_gap(self) -> None:
+        gaps = ["Add password reset", "Add rate limiting"]
+        agent = _GapsAgent(gaps)
+        result = find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert len(result) == len(gaps)
+
+
+# -- find_gaps: agent interaction ----------------------------------------------
+
+
+class TestFindGapsAgentInteraction:
+    """find_gaps sends plan text to the agent."""
+
+    def test_calls_agent_once(self) -> None:
+        agent = _GapsAgent(["Add password reset"])
+        find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert len(agent.calls) == 1
+
+    def test_prompt_contains_plan_text(self) -> None:
+        agent = _GapsAgent(["Add password reset"])
+        find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert "Add login endpoint" in agent.calls[0]
+        assert "Add logout endpoint" in agent.calls[0]
+        assert "Create users table" in agent.calls[0]
+
+
+# -- find_gaps: parsing -------------------------------------------------------
+
+
+class TestFindGapsParsing:
+    """find_gaps parses numbered items from agent output."""
+
+    def test_parses_gap_descriptions(self) -> None:
+        gaps = ["Add password reset", "Add rate limiting"]
+        agent = _GapsAgent(gaps)
+        result = find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert result == gaps
+
+    def test_no_gaps_returns_empty_list(self) -> None:
+        agent = _GapsAgent([])
+        result = find_gaps(plan_text=_GAPS_PLAN_TEXT, agent=agent)
+        assert result == []
+
+
+# -- find_gaps: protocol conformance -------------------------------------------
+
+
+class TestFindGapsProtocol:
+    """_GapsAgent satisfies AgentPort protocol."""
+
+    def test_gaps_agent_is_agent_port(self) -> None:
+        agent = _GapsAgent([])
         assert isinstance(agent, AgentPort)

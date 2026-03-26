@@ -12,6 +12,7 @@ from wiggum.plan import (
     get_unchecked,
     mark_checked,
     parse_plan,
+    remove_checked,
 )
 
 SIMPLE_PLAN = textwrap.dedent("""\
@@ -423,3 +424,89 @@ class TestMarkChecked:
         descriptions = [item.description for item in unchecked]
         assert "Pending task A" not in descriptions
         assert "Pending task B" in descriptions
+
+
+PLAN_ALL_CHECKED_MULTI = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [x] Task A
+    - [x] Task B
+
+    ### Test
+    - [x] Task C
+""")
+
+PLAN_MIXED_FOR_REMOVE = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [x] Done task
+    - [ ] Pending task A
+
+    ### Test
+    - [ ] Pending task B
+    - [x] Another done task
+""")
+
+PLAN_NONE_CHECKED = textwrap.dedent("""\
+    # Plan
+
+    ### Build
+    - [ ] Task A
+    - [ ] Task B
+""")
+
+
+class TestRemoveChecked:
+    """Tests for remove_checked deleting all [x] items from plan text."""
+
+    def test_removes_checked_items(self) -> None:
+        result = remove_checked(PLAN_MIXED_FOR_REMOVE)
+        assert "- [x] Done task" not in result
+        assert "- [x] Another done task" not in result
+
+    def test_preserves_unchecked_items(self) -> None:
+        result = remove_checked(PLAN_MIXED_FOR_REMOVE)
+        assert "- [ ] Pending task A" in result
+        assert "- [ ] Pending task B" in result
+
+    def test_preserves_plan_title(self) -> None:
+        result = remove_checked(PLAN_MIXED_FOR_REMOVE)
+        plan = parse_plan(result)
+        assert plan.title == "Plan"
+
+    def test_preserves_section_headers(self) -> None:
+        result = remove_checked(PLAN_MIXED_FOR_REMOVE)
+        plan = parse_plan(result)
+        titles = [s.title for s in plan.sections]
+        assert "Build" in titles
+        assert "Test" in titles
+
+    def test_all_checked_yields_no_items(self) -> None:
+        result = remove_checked(PLAN_ALL_CHECKED_MULTI)
+        plan = parse_plan(result)
+        all_items = [item for s in plan.sections for item in s.items]
+        assert all_items == []
+
+    def test_none_checked_returns_unchanged(self) -> None:
+        result = remove_checked(PLAN_NONE_CHECKED)
+        assert result == PLAN_NONE_CHECKED
+
+    def test_roundtrip_parse_has_no_checked(self) -> None:
+        result = remove_checked(PLAN_MIXED_FOR_REMOVE)
+        plan = parse_plan(result)
+        checked = [item for s in plan.sections for item in s.items if item.checked]
+        assert checked == []
+
+    def test_uppercase_x_removed(self) -> None:
+        text = textwrap.dedent("""\
+            # Plan
+
+            ### Build
+            - [X] Done with uppercase
+            - [ ] Still pending
+        """)
+        result = remove_checked(text)
+        assert "[X] Done with uppercase" not in result
+        assert "- [ ] Still pending" in result

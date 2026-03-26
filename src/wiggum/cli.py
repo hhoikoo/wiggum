@@ -4,6 +4,11 @@ from pathlib import Path  # noqa: TC003 - cyclopts needs Path at runtime for arg
 
 import cyclopts
 
+from wiggum.agent.shell import ShellAgentAdapter
+from wiggum.config import load_config, validate_startup
+from wiggum.git.shell import ShellGitAdapter
+from wiggum.loop import inner_loop
+
 app = cyclopts.App(name="wiggum")
 
 
@@ -13,3 +18,12 @@ def run(plan: Path) -> None:
     if not plan.is_file():
         msg = f"Plan file not found: {plan}"
         raise FileNotFoundError(msg)
+
+    git = ShellGitAdapter(repo_path=plan.parent)
+    repo_root = git.repo_root()
+
+    validate_startup(repo_path=repo_root)
+    config = load_config(repo_root)
+    agent = ShellAgentAdapter(work_dir=repo_root)
+
+    inner_loop(plan_path=plan, agent=agent, git=git, config=config)
