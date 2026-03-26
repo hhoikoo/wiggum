@@ -187,11 +187,6 @@ harvest_todos() {
     for f in $glob_pattern; do
         [ -f "$f" ] || continue
         grep '^NEW_TODO: ' "$f" 2>/dev/null | sed 's/^NEW_TODO: //' | while IFS= read -r todo; do
-            # Skip if this TODO (or something very similar) already exists in the plan.
-            if grep -qF -- "${todo:0:60}" "$PLAN_FILE" 2>/dev/null; then
-                log "Skipping duplicate TODO: ${todo:0:60}..."
-                continue
-            fi
             log "Discovered TODO: $todo"
             append_todo "$todo"
         done
@@ -467,6 +462,14 @@ red_phase() {
     # Tools restricted: no Bash = cannot run tests.
     local red_tools="Read,Write,Edit,Glob,Grep"
 
+    # Build list of all items in this batch + existing plan items for context.
+    local all_batch_items=""
+    for item in "$@"; do
+        all_batch_items="${all_batch_items}- ${item}"$'\n'
+    done
+    local existing_plan
+    existing_plan="$(cat "$PLAN_FILE")"
+
     local pids=()
     local i=0
     for item in "$@"; do
@@ -479,13 +482,21 @@ Working directory: $PROJECT_DIR
 
 $item
 
+### Other items being worked on in parallel (do NOT write tests for these)
+
+$all_batch_items
+
+### Existing plan (do NOT output NEW_TODO for anything already listed here)
+
+$existing_plan
+
 ### Instructions
 
 1. Read relevant source code to understand current state.
 2. Write pytest test(s) that FAIL because the described behavior does not exist yet.
 3. Place tests under tests/ mirroring the src/wiggum/ structure.
 4. Do NOT implement the feature. Only write tests.
-5. Only output NEW_TODO: for missing dependencies YOUR item needs. Do NOT report issues in unrelated modules.
+5. Only output NEW_TODO: for missing dependencies YOUR item needs that are NOT already in the plan or batch above.
 EOF
         )" "${WORK_DIR}/red_${i}.out" "RED[${item:0:50}]" "$red_tools"
         pids+=($!)
@@ -501,38 +512,122 @@ EOF
 # GREEN phase: implement fixes (sequential to avoid file conflicts)
 # --------------------------------------------------------------------------- #
 
-green_phase() {
-    phase_start "--- GREEN PHASE: implementing fixes ---"
-
+# Parallel GREEN pass: launch agents concurrently with a list of tasks.
+# Each task is a line in the tasks string. No test execution -- harness handles that.
+green_pass() {
+    local tag="$1"
+    local tasks="$2"
     local green_tools="Read,Write,Edit,Glob,Grep,Bash"
 
+    local existing_plan
+    existing_plan="$(cat "$PLAN_FILE")"
+
+    local pids=()
     local i=0
-    for item in "$@"; do
-        claude_run "$(cat <<EOF
-## Task: Implement Minimal Fix (GREEN)
+    while IFS= read -r task; do
+        [[ -z "$task" ]] && continue
+        claude_bg "$(cat <<EOF
+## Task: Implement Fix (GREEN)
 
 Working directory: $PROJECT_DIR
 
-### Item to implement
+### What to fix
 
-$item
+$task
+
+### Existing plan (do NOT output NEW_TODO for anything already listed here)
+
+$existing_plan
 
 ### Instructions
 
-1. Read the failing tests for this item.
-2. Write the MINIMUM code to make those tests pass.
+1. Read relevant tests and source code to understand what is expected.
+2. Write the MINIMUM code to make it work.
 3. Run \`uv run ruff check --fix --unsafe-fixes\` on files you changed and fix any remaining lint errors.
-4. Run \`uv run pytest\` to verify your changes pass. If tests fail, fix your code and re-run until all tests pass. Ignore pre-existing failures unrelated to your item.
+4. Do NOT run pytest -- the harness handles that.
 5. Do NOT write new tests.
 6. Do NOT refactor unrelated code.
-7. Only output NEW_TODO: for gaps directly caused by YOUR item. Do NOT report pre-existing test failures or issues in unrelated modules.
+7. Only output NEW_TODO: for gaps that are NOT already in the plan above.
 EOF
-        )" "GREEN[${item:0:50}]" "$green_tools" > "${WORK_DIR}/green_${i}.out"
-        harvest_todos "${WORK_DIR}/green_${i}.out"
+        )" "${WORK_DIR}/${tag}_${i}.out" "GREEN[${task:0:50}]" "$green_tools"
+        pids+=($!)
         ((i++))
+    done <<< "$tasks"
+
+    for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+    harvest_todos "${WORK_DIR}/${tag}_*.out"
+}
+
+# Full GREEN phase: parallel implement -> check -> parallel fix -> check -> loop.
+green_phase() {
+    phase_start "--- GREEN PHASE ---"
+
+    local round=0
+
+    # Round 1: tasks are the plan items.
+    local tasks=""
+    for item in "$@"; do
+        tasks="${tasks}${item}"$'\n'
     done
 
-    phase_end "GREEN phase complete."
+    while true; do
+        ((round++))
+
+        log "GREEN round $round (parallel)..."
+        green_pass "green_r${round}" "$tasks"
+
+        # Auto-fix lint.
+        (cd "$PROJECT_DIR" && uv run ruff check --fix src/ tests/ 2>/dev/null || true)
+        (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
+
+        if run_checks "green_r${round}"; then
+            phase_end "GREEN phase complete -- all checks pass (round $round)."
+            return 0
+        fi
+
+        log "GREEN: checks failing after round $round. Triaging..."
+
+        # Build tasks for next round by having a model group failures by root cause.
+        local test_out="${WORK_DIR}/test_green_r${round}.out"
+        local lint_out="${WORK_DIR}/lint_green_r${round}.out"
+        local failure_summary
+        failure_summary="$(tail -80 "$test_out" 2>/dev/null || echo '(no test output)')"
+        local lint_summary
+        lint_summary="$(tail -30 "$lint_out" 2>/dev/null || echo '(no lint output)')"
+
+        tasks="$(claude_run "$(cat <<EOF
+## Task: Triage Failures
+
+### Test output
+
+$failure_summary
+
+### Lint output
+
+$lint_summary
+
+### Instructions
+
+Group the failures above by root cause. Multiple tests may fail for the same reason (e.g. a missing import, a wrong return type, a missing method). Each group becomes one fix task.
+
+Output one task per line. Each line should describe the root cause and list the affected tests/files. Example:
+Missing GitPort.status method -- FAILED tests/test_git.py::test_status, tests/test_git.py::test_status_clean
+Import error in wiggum.config -- FAILED tests/test_config.py::test_load, tests/test_cli.py::test_startup
+
+Output ONLY the task lines. No numbering, no bullets, no commentary.
+EOF
+        )" "triage")"
+
+        if [ -z "$tasks" ]; then
+            log "GREEN: triage returned nothing."
+            break
+        fi
+        log "GREEN: $(echo "$tasks" | grep -c . || echo 0) fix tasks for round $((round + 1))."
+    done
+
+    # Should not reach here -- loop exits via return 0 on success or break on triage failure.
+    phase_end "GREEN phase complete -- triage could not produce fix tasks."
+    return 1
 }
 
 # --------------------------------------------------------------------------- #
@@ -584,63 +679,9 @@ inner_loop() {
         log "Checks failing as expected after RED."
     fi
 
-    # GREEN: implement fixes (sequential to avoid codebase conflicts).
-    green_phase "${items[@]}"
-
-    # Fix loop: auto-fix lint, run checks, remediate if failing, repeat.
-    local max_fix_attempts=3
-    local attempt=0
-    local checks_passed=false
-
-    while [ "$attempt" -lt "$max_fix_attempts" ]; do
-        ((attempt++))
-
-        (cd "$PROJECT_DIR" && uv run ruff check --fix --unsafe-fixes src/ tests/ 2>/dev/null || true)
-        (cd "$PROJECT_DIR" && uv run ruff format src/ tests/ 2>/dev/null || true)
-
-        if run_checks "fix_${attempt}"; then
-            checks_passed=true
-            break
-        fi
-
-        log "Checks failing (attempt $attempt/$max_fix_attempts). Remediating..."
-
-        local test_failures
-        test_failures="$(tail -100 "${WORK_DIR}/test_fix_${attempt}.out" 2>/dev/null || echo '(no output)')"
-        local lint_failures
-        lint_failures="$(tail -50 "${WORK_DIR}/lint_fix_${attempt}.out" 2>/dev/null || echo '(no output)')"
-
-        claude_run "$(cat <<EOF
-## Task: Fix Remaining Failures
-
-Working directory: $PROJECT_DIR
-
-### Test failures
-
-$test_failures
-
-### Lint failures
-
-$lint_failures
-
-### Instructions
-
-1. Read the failing test output and lint errors.
-2. Fix ALL failures. Make all tests pass and lint clean.
-3. Run \`uv run ruff check --fix --unsafe-fixes\` on changed files.
-4. Do NOT run pytest -- the harness runs tests.
-5. If a fix requires broader changes, output: NEW_TODO: <description>
-EOF
-        )" "REMEDIATE[$attempt]" > "${WORK_DIR}/remediate_${attempt}.out"
-        harvest_todos "${WORK_DIR}/remediate_${attempt}.out"
-    done
-
-    if [ "$checks_passed" = true ]; then
-        log "All checks pass."
+    # GREEN: parallel implement -> check -> fix -> check -> loop.
+    if green_phase "${items[@]}"; then
         for item in "${items[@]}"; do mark_checked "$item"; done
-    else
-        log "Checks still failing after $max_fix_attempts attempts."
-        append_todo "FIX: checks still failing -- see ${WORK_DIR}/test_fix_${attempt}.out"
     fi
 
     # Commit progress regardless (partial or complete).
