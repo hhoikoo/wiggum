@@ -21,11 +21,11 @@ def ensure_symlinks(
         target = worktree_path / name
 
         if not source.exists():
-            _log.debug("skipping %s: source does not exist in repo root", name)
+            _log.info("skipping %s: source does not exist in repo root", name)
             continue
 
         if target.exists() or target.is_symlink():
-            _log.debug("skipping %s: target already exists in worktree", name)
+            _log.info("skipping %s: target already exists in worktree", name)
             continue
 
         target.symlink_to(source)

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from wiggum.agent import AgentPort, AgentResult
-from wiggum.config import WiggumConfig
+from wiggum.config import BuildConfig, WiggumConfig
 from wiggum.git import GitPort
 from wiggum.loop import (
     MAX_FIX_ATTEMPTS,
@@ -772,6 +772,98 @@ class TestInnerLoopBatchSize:
         content = plan_path.read_text()
         checked_count = content.count("- [x]")
         assert checked_count <= 3
+
+
+# -- inner_loop: build config as agent context --------------------------------
+
+
+class _BuildConfigAgent:
+    """Agent that records both prompts and system_prompts."""
+
+    def __init__(self, item_descriptions: Sequence[str]) -> None:
+        self.prompts: list[str] = []
+        self.system_prompts: list[str | None] = []
+        self._response = "\n".join(
+            f"{i + 1}. {d}" for i, d in enumerate(item_descriptions)
+        )
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
+        """Record prompt and system_prompt."""
+        self.prompts.append(prompt)
+        self.system_prompts.append(system_prompt)
+        return AgentResult(stdout=self._response, stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+def _all_agent_text(agent: _BuildConfigAgent) -> str:
+    """Concatenate all prompt and system_prompt text from a recording agent."""
+    parts: list[str] = []
+    for p, s in zip(agent.prompts, agent.system_prompts, strict=True):
+        parts.append(p)
+        if s is not None:
+            parts.append(s)
+    return " ".join(parts)
+
+
+class TestInnerLoopBuildConfig:
+    """inner_loop communicates build config to agents as read-only metadata."""
+
+    def test_agent_receives_setup_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text(_ORCHESTRATION_PLAN)
+        config = WiggumConfig(build=BuildConfig(setup_command="uv sync"))
+        agent = _BuildConfigAgent(["Add foo feature", "Add bar feature"])
+        git = _InnerLoopGit()
+        monkeypatch.setattr("wiggum.loop.fix_loop", _stub_fix_loop_pass)
+        inner_loop(plan_path=plan_path, agent=agent, git=git, config=config)
+        assert "uv sync" in _all_agent_text(agent)
+
+    def test_agent_receives_verify_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text(_ORCHESTRATION_PLAN)
+        config = WiggumConfig(build=BuildConfig(verify_command="uv run pytest"))
+        agent = _BuildConfigAgent(["Add foo feature", "Add bar feature"])
+        git = _InnerLoopGit()
+        monkeypatch.setattr("wiggum.loop.fix_loop", _stub_fix_loop_pass)
+        inner_loop(plan_path=plan_path, agent=agent, git=git, config=config)
+        assert "uv run pytest" in _all_agent_text(agent)
+
+    def test_both_commands_in_agent_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text(_ORCHESTRATION_PLAN)
+        config = WiggumConfig(
+            build=BuildConfig(setup_command="make install", verify_command="make test")
+        )
+        agent = _BuildConfigAgent(["Add foo feature", "Add bar feature"])
+        git = _InnerLoopGit()
+        monkeypatch.setattr("wiggum.loop.fix_loop", _stub_fix_loop_pass)
+        inner_loop(plan_path=plan_path, agent=agent, git=git, config=config)
+        context = _all_agent_text(agent)
+        assert "make install" in context
+        assert "make test" in context
+
+
+class TestBuildConfigAgentProtocol:
+    """_BuildConfigAgent satisfies AgentPort protocol."""
+
+    def test_is_agent_port(self) -> None:
+        agent = _BuildConfigAgent([])
+        assert isinstance(agent, AgentPort)
 
 
 # -- inner_loop: protocol conformance -----------------------------------------

@@ -68,6 +68,7 @@ def red_phase(
     agent: AgentService,
     batch: Sequence[PlanItem] | None = None,
     plan_text: str | None = None,
+    system_prompt: str | None = None,
 ) -> list[AgentResult]:
     """Spawn parallel agents to write failing tests per item."""
     if not items:
@@ -75,18 +76,28 @@ def red_phase(
 
     def _write_test(item: PlanItem) -> AgentResult:
         prompt = _build_red_prompt(item=item, batch=batch, plan_text=plan_text)
-        return agent.run(prompt=prompt, allowed_tools=list(_TOOLS_NO_BASH))
+        return agent.run(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            allowed_tools=list(_TOOLS_NO_BASH),
+        )
 
     with ThreadPoolExecutor() as pool:
         return list(pool.map(_write_test, items))
 
 
-def green_phase(*, items: Sequence[PlanItem], agent: AgentService) -> list[AgentResult]:
+def green_phase(
+    *,
+    items: Sequence[PlanItem],
+    agent: AgentService,
+    system_prompt: str | None = None,
+) -> list[AgentResult]:
     """Spawn sequential agents to implement minimal fixes per item."""
     results: list[AgentResult] = []
     for item in items:
         result = agent.run(
             prompt=f"Implement the minimal fix for: {item.description}",
+            system_prompt=system_prompt,
             allowed_tools=list(_TOOLS_NO_BASH),
         )
         results.append(result)
@@ -159,6 +170,18 @@ def find_gaps(*, plan_text: str, agent: AgentService) -> list[str]:
     return _NUMBERED_ITEM_RE.findall(result.stdout)
 
 
+def _build_config_context(config: WiggumConfig) -> str | None:
+    """Build a system prompt fragment from build config metadata."""
+    parts: list[str] = []
+    if config.build.setup_command is not None:
+        parts.append(f"Setup command: {config.build.setup_command}")
+    if config.build.verify_command is not None:
+        parts.append(f"Verify command: {config.build.verify_command}")
+    if not parts:
+        return None
+    return "## Build Config\n\n" + "\n".join(parts)
+
+
 def inner_loop(
     *,
     plan_path: Path,
@@ -176,8 +199,9 @@ def inner_loop(
     if not selected:
         return
 
-    red_phase(items=selected, agent=agent)
-    green_phase(items=selected, agent=agent)
+    build_context = _build_config_context(config)
+    red_phase(items=selected, agent=agent, system_prompt=build_context)
+    green_phase(items=selected, agent=agent, system_prompt=build_context)
 
     def _check() -> CheckResult:
         raw = _run_checks(repo_path=git.repo_root())

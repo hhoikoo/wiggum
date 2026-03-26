@@ -1,6 +1,7 @@
 """Outer-loop orchestration: verify, gaps, reorganize, and inner_loop batches."""
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from wiggum.loop import inner_loop
@@ -13,15 +14,28 @@ if TYPE_CHECKING:
     from wiggum.config import WiggumConfig
     from wiggum.git import GitClient
 
+_log = logging.getLogger(__name__)
 
-def rebase_onto_base(*, git: GitClient, config: WiggumConfig) -> None:
+
+def rebase_onto_base(
+    *,
+    git: GitClient,
+    config: WiggumConfig,
+    agent: AgentService | None = None,
+) -> None:
     """Fetch and rebase working branch onto the base branch."""
     branch = (
         config.base_branch if config.base_branch is not None else git.default_branch()
     )
     git.fetch("origin", branch)
-    if not git.rebase(f"origin/{branch}"):
-        git.rebase_abort()
+    if git.rebase(f"origin/{branch}"):
+        return
+    if agent is not None:
+        agent.run(prompt="Resolve the current rebase conflicts in the working tree.")
+        if git.rebase(f"origin/{branch}"):
+            return
+        _log.warning("Rebase failed after conflict resolution attempt; aborting rebase")
+    git.rebase_abort()
 
 
 def verify_checked(*, plan: Plan, agent: AgentService) -> list[PlanItem]:

@@ -1,6 +1,7 @@
 """Tests for verify_checked(), reorganize_findings(), outer_loop(), and rebase_onto_base() in wiggum.outer_loop."""
 
 import json
+import logging
 import textwrap
 import threading
 from pathlib import Path
@@ -927,3 +928,200 @@ class TestRebaseOntoBaseProtocol:
         from wiggum.git import GitPort
 
         assert isinstance(_RebaseGit(), GitPort)
+
+
+# == rebase conflict resolution tests ========================================
+
+
+class _ConflictRebaseGit:
+    """Git fake that returns configurable results on successive rebase calls."""
+
+    def __init__(self, *, rebase_results: list[bool], default: str = "main") -> None:
+        self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self._rebase_results = list(rebase_results)
+        self._rebase_index = 0
+        self._default = default
+
+    def repo_root(self) -> Path:
+        """Return a fake repo root."""
+        return Path("/fake")
+
+    def is_repo(self) -> bool:
+        """Return True."""
+        return True
+
+    def current_branch(self) -> str:
+        """Return a fake branch."""
+        return "feat/work"
+
+    def status(self) -> Sequence[StatusEntry]:
+        """Return empty status."""
+        return []
+
+    def diff(self, *, staged: bool = False) -> str:
+        """Return empty diff."""
+        return ""
+
+    def diff_names(self, *, staged: bool = False) -> Sequence[str]:
+        """Return empty diff names."""
+        return []
+
+    def log(self, *, max_count: int = 10) -> Sequence[LogEntry]:
+        """Return empty log."""
+        return []
+
+    def add(self, paths: Sequence[str]) -> None:
+        """No-op."""
+
+    def stage_all(self) -> None:
+        """No-op."""
+
+    def commit(self, message: str) -> None:
+        """No-op."""
+
+    def fetch(self, remote: str, branch: str) -> None:
+        """Record fetch call."""
+        self.calls.append(("fetch", (remote, branch)))
+
+    def rebase(self, onto: str) -> bool:
+        """Record rebase call, returning the next configured result."""
+        self.calls.append(("rebase", (onto,)))
+        result = self._rebase_results[self._rebase_index]
+        self._rebase_index = min(self._rebase_index + 1, len(self._rebase_results) - 1)
+        return result
+
+    def rebase_abort(self) -> None:
+        """Record rebase_abort call."""
+        self.calls.append(("rebase_abort", ()))
+
+    def default_branch(self) -> str:
+        """Return configured default branch."""
+        self.calls.append(("default_branch", ()))
+        return self._default
+
+
+class _ConflictAgent:
+    """Agent that records calls for conflict-resolution tests."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        system_prompt: str | None = None,
+        allowed_tools: Sequence[str] | None = None,
+    ) -> AgentResult:
+        """Record the call and return success."""
+        self.calls.append(prompt)
+        return AgentResult(stdout="resolved", stderr="", exit_code=0)
+
+    def run_background(self, *, prompt: str) -> object:
+        """Not used."""
+        raise NotImplementedError
+
+
+# -- agent invocation on conflict --------------------------------------------
+
+
+class TestRebaseConflictInvokesAgent:
+    """On first rebase conflict, agent is invoked for conflict resolution."""
+
+    def test_agent_called_on_conflict(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, True])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        assert len(agent.calls) == 1
+
+    def test_agent_not_called_on_success(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[True])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        assert len(agent.calls) == 0
+
+
+# -- retry after agent resolution -------------------------------------------
+
+
+class TestRebaseConflictRetry:
+    """After agent resolves conflicts, rebase is retried."""
+
+    def test_rebase_called_twice_on_conflict(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, True])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        rebase_calls = [c for c in git.calls if c[0] == "rebase"]
+        assert len(rebase_calls) == 2
+
+    def test_no_abort_when_retry_succeeds(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, True])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        abort_calls = [c for c in git.calls if c[0] == "rebase_abort"]
+        assert len(abort_calls) == 0
+
+
+# -- abort when retry also fails ---------------------------------------------
+
+
+class TestRebaseConflictRetryFails:
+    """When retry also fails, rebase is aborted and function continues."""
+
+    def test_abort_on_second_failure(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, False])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        assert ("rebase_abort", ()) in git.calls
+
+    def test_does_not_raise_on_second_failure(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, False])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+
+    def test_warning_logged_on_second_failure(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, False])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        with caplog.at_level(logging.WARNING, logger="wiggum.outer_loop"):
+            rebase_onto_base(git=git, config=config, agent=agent)
+        assert any("rebase" in r.message.lower() for r in caplog.records)
+
+
+# -- call order during conflict resolution -----------------------------------
+
+
+class TestRebaseConflictCallOrder:
+    """Agent is called between the two rebase attempts."""
+
+    def test_agent_called_after_first_rebase_before_retry(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False, True])
+        agent = _ConflictAgent()
+        config = WiggumConfig(base_branch="main")
+        rebase_onto_base(git=git, config=config, agent=agent)
+        rebase_calls = [c for c in git.calls if c[0] == "rebase"]
+        assert len(rebase_calls) == 2
+        assert len(agent.calls) == 1
+
+
+# -- protocol conformance for conflict fakes ---------------------------------
+
+
+class TestRebaseConflictProtocol:
+    """Conflict-resolution fakes satisfy their respective protocols."""
+
+    def test_conflict_rebase_git_is_git_port(self) -> None:
+        from wiggum.git import GitPort
+
+        assert isinstance(_ConflictRebaseGit(rebase_results=[True]), GitPort)
+
+    def test_conflict_agent_is_agent_port(self) -> None:
+        assert isinstance(_ConflictAgent(), AgentPort)

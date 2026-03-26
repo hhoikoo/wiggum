@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from wiggum.worktree import ensure_symlinks
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 class TestEnsureSymlinksCreatesLinks:
@@ -106,6 +109,91 @@ class TestEnsureSymlinksSkipsWhenTargetExists:
 
         assert not (worktree / ".claude").is_symlink()
         assert (worktree / ".claude").read_text() == "occupied"
+
+
+class TestEnsureSymlinksLogging:
+    """Tests for logging which symlinks were created vs skipped."""
+
+    def test_logs_created_symlink_at_info(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo_root = tmp_path / "repo"
+        worktree = tmp_path / "worktree"
+        repo_root.mkdir()
+        worktree.mkdir()
+        (repo_root / ".claude").mkdir()
+
+        with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
+            ensure_symlinks(repo_root, worktree, [".claude"])
+
+        created_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.INFO and ".claude" in r.message
+        ]
+        assert len(created_records) == 1
+        assert "created" in created_records[0].message.lower()
+
+    def test_logs_skipped_source_missing_at_info(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo_root = tmp_path / "repo"
+        worktree = tmp_path / "worktree"
+        repo_root.mkdir()
+        worktree.mkdir()
+
+        with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
+            ensure_symlinks(repo_root, worktree, [".nonexistent"])
+
+        skipped_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.INFO and ".nonexistent" in r.message
+        ]
+        assert len(skipped_records) == 1
+        assert "skip" in skipped_records[0].message.lower()
+
+    def test_logs_skipped_target_exists_at_info(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo_root = tmp_path / "repo"
+        worktree = tmp_path / "worktree"
+        repo_root.mkdir()
+        worktree.mkdir()
+        (repo_root / ".claude").mkdir()
+        (worktree / ".claude").mkdir()
+
+        with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
+            ensure_symlinks(repo_root, worktree, [".claude"])
+
+        skipped_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.INFO and ".claude" in r.message
+        ]
+        assert len(skipped_records) == 1
+        assert "skip" in skipped_records[0].message.lower()
+
+    def test_logs_all_outcomes_for_mixed_directories(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo_root = tmp_path / "repo"
+        worktree = tmp_path / "worktree"
+        repo_root.mkdir()
+        worktree.mkdir()
+        (repo_root / ".claude").mkdir()
+        (repo_root / ".wiggum").mkdir()
+        (worktree / ".wiggum").mkdir()
+
+        with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
+            ensure_symlinks(repo_root, worktree, [".claude", ".wiggum", ".missing"])
+
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert len(info_records) == 3
+        messages = [r.message.lower() for r in info_records]
+        assert any("created" in m and ".claude" in m for m in messages)
+        assert any("skip" in m and ".wiggum" in m for m in messages)
+        assert any("skip" in m and ".missing" in m for m in messages)
 
 
 class TestEnsureSymlinksReturnValue:
