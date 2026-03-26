@@ -418,6 +418,83 @@ class TestRebase:
         assert result is False
 
 
+class TestRebaseContinue:
+    def test_rebase_continue_returns_true_after_conflict_resolution(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        branch = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+        _run_git(local, "checkout", "-b", "feat/continue-test")
+        (local / "initial.txt").write_text("feature version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature change")
+
+        _run_git(local, "checkout", branch)
+        (local / "initial.txt").write_text("main version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "main change")
+
+        _run_git(local, "checkout", "feat/continue-test")
+        subprocess.run(
+            ["git", "rebase", branch],
+            cwd=local,
+            capture_output=True,
+            check=False,
+        )
+
+        # Resolve the conflict and stage
+        (local / "initial.txt").write_text("resolved version")
+        _run_git(local, "add", "initial.txt")
+
+        adapter = ShellGitAdapter(repo_path=local)
+        result = adapter.rebase_continue()
+
+        assert result is True
+
+    def test_rebase_continue_returns_false_when_conflicts_remain(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        branch = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+
+        # Create feature branch with two conflicting commits
+        _run_git(local, "checkout", "-b", "feat/continue-fail")
+        (local / "initial.txt").write_text("feature v1")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature change 1")
+        (local / "initial.txt").write_text("feature v2")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature change 2")
+
+        _run_git(local, "checkout", branch)
+        (local / "initial.txt").write_text("main version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "main change")
+
+        _run_git(local, "checkout", "feat/continue-fail")
+        subprocess.run(
+            ["git", "rebase", branch],
+            cwd=local,
+            capture_output=True,
+            check=False,
+        )
+
+        # Resolve first conflict but leave the second one for rebase --continue to hit
+        (local / "initial.txt").write_text("resolved first")
+        _run_git(local, "add", "initial.txt")
+
+        adapter = ShellGitAdapter(repo_path=local)
+        result = adapter.rebase_continue()
+
+        assert result is False
+
+
 class TestRebaseAbort:
     def test_rebase_abort_cleans_up_conflict(
         self,

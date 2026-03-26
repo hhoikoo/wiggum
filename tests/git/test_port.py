@@ -58,6 +58,9 @@ class _ConformingAdapter:
     def rebase(self, onto: str) -> bool:
         return True
 
+    def rebase_continue(self) -> bool:
+        return True
+
     def rebase_abort(self) -> None:
         return
 
@@ -128,6 +131,10 @@ def test_fetch_defined():
 
 def test_rebase_defined():
     assert callable(getattr(GitPort, "rebase", None))
+
+
+def test_rebase_continue_defined():
+    assert callable(getattr(GitPort, "rebase_continue", None))
 
 
 def test_rebase_abort_defined():

@@ -13,6 +13,7 @@ _log = logging.getLogger(__name__)
 def ensure_symlinks(
     repo_root: Path,
     worktree_path: Path,
+    *,
     directories: Sequence[str],
 ) -> None:
     """Create symlinks from worktree into repo root for each directory."""

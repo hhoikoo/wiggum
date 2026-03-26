@@ -111,6 +111,14 @@ class SubprocessGit:
             return False
         return True
 
+    def rebase_continue(self) -> bool:
+        """Continue an in-progress rebase after conflict resolution."""
+        try:
+            self._run("rebase", "--continue")
+        except subprocess.CalledProcessError:
+            return False
+        return True
+
     def rebase_abort(self) -> None:
         """Abort an in-progress rebase."""
         self._run("rebase", "--abort")

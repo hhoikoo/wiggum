@@ -469,6 +469,10 @@ class _OuterLoopGit:
         """Return True (success)."""
         return True
 
+    def rebase_continue(self) -> bool:
+        """Return True (success)."""
+        return True
+
     def rebase_abort(self) -> None:
         """No-op."""
 
@@ -837,6 +841,11 @@ class _RebaseGit:
         self.calls.append(("rebase", (onto,)))
         return self._rebase_succeeds
 
+    def rebase_continue(self) -> bool:
+        """Record rebase_continue call."""
+        self.calls.append(("rebase_continue", ()))
+        return True
+
     def rebase_abort(self) -> None:
         """Record rebase_abort call."""
         self.calls.append(("rebase_abort", ()))
@@ -936,10 +945,17 @@ class TestRebaseOntoBaseProtocol:
 class _ConflictRebaseGit:
     """Git fake that returns configurable results on successive rebase calls."""
 
-    def __init__(self, *, rebase_results: list[bool], default: str = "main") -> None:
+    def __init__(
+        self,
+        *,
+        rebase_results: list[bool],
+        continue_result: bool = True,
+        default: str = "main",
+    ) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self._rebase_results = list(rebase_results)
         self._rebase_index = 0
+        self._continue_result = continue_result
         self._default = default
 
     def repo_root(self) -> Path:
@@ -989,6 +1005,11 @@ class _ConflictRebaseGit:
         result = self._rebase_results[self._rebase_index]
         self._rebase_index = min(self._rebase_index + 1, len(self._rebase_results) - 1)
         return result
+
+    def rebase_continue(self) -> bool:
+        """Record rebase_continue call and return configured result."""
+        self.calls.append(("rebase_continue", ()))
+        return self._continue_result
 
     def rebase_abort(self) -> None:
         """Record rebase_abort call."""
@@ -1047,18 +1068,18 @@ class TestRebaseConflictInvokesAgent:
 
 
 class TestRebaseConflictRetry:
-    """After agent resolves conflicts, rebase is retried."""
+    """After agent resolves conflicts, rebase_continue is called."""
 
-    def test_rebase_called_twice_on_conflict(self) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, True])
+    def test_rebase_continue_called_after_conflict(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=True)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         rebase_onto_base(git=git, config=config, agent=agent)
-        rebase_calls = [c for c in git.calls if c[0] == "rebase"]
-        assert len(rebase_calls) == 2
+        continue_calls = [c for c in git.calls if c[0] == "rebase_continue"]
+        assert len(continue_calls) == 1
 
-    def test_no_abort_when_retry_succeeds(self) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, True])
+    def test_no_abort_when_continue_succeeds(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=True)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         rebase_onto_base(git=git, config=config, agent=agent)
@@ -1070,25 +1091,25 @@ class TestRebaseConflictRetry:
 
 
 class TestRebaseConflictRetryFails:
-    """When retry also fails, rebase is aborted and function continues."""
+    """When rebase_continue also fails, rebase is aborted and function continues."""
 
-    def test_abort_on_second_failure(self) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, False])
+    def test_abort_on_continue_failure(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=False)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         rebase_onto_base(git=git, config=config, agent=agent)
         assert ("rebase_abort", ()) in git.calls
 
-    def test_does_not_raise_on_second_failure(self) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, False])
+    def test_does_not_raise_on_continue_failure(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=False)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         rebase_onto_base(git=git, config=config, agent=agent)
 
-    def test_warning_logged_on_second_failure(
+    def test_warning_logged_on_continue_failure(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, False])
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=False)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         with caplog.at_level(logging.WARNING, logger="wiggum.outer_loop"):
@@ -1100,15 +1121,17 @@ class TestRebaseConflictRetryFails:
 
 
 class TestRebaseConflictCallOrder:
-    """Agent is called between the two rebase attempts."""
+    """Agent is called between rebase and rebase_continue."""
 
-    def test_agent_called_after_first_rebase_before_retry(self) -> None:
-        git = _ConflictRebaseGit(rebase_results=[False, True])
+    def test_agent_called_after_rebase_before_continue(self) -> None:
+        git = _ConflictRebaseGit(rebase_results=[False], continue_result=True)
         agent = _ConflictAgent()
         config = WiggumConfig(base_branch="main")
         rebase_onto_base(git=git, config=config, agent=agent)
-        rebase_calls = [c for c in git.calls if c[0] == "rebase"]
-        assert len(rebase_calls) == 2
+        call_names = [c[0] for c in git.calls]
+        rebase_idx = call_names.index("rebase")
+        continue_idx = call_names.index("rebase_continue")
+        assert rebase_idx < continue_idx
         assert len(agent.calls) == 1
 
 

@@ -32,7 +32,7 @@ def rebase_onto_base(
         return
     if agent is not None:
         agent.run(prompt="Resolve the current rebase conflicts in the working tree.")
-        if git.rebase(f"origin/{branch}"):
+        if git.rebase_continue():
             return
         _log.warning("Rebase failed after conflict resolution attempt; aborting rebase")
     git.rebase_abort()
@@ -149,6 +149,8 @@ def outer_loop(
 
     cycles = 0
     while True:
+        rebase_onto_base(git=git, config=config, agent=agent)
+
         plan = parse_plan(plan_path.read_text())
         if count_unchecked(plan) == 0:
             break

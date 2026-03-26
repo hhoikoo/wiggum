@@ -21,7 +21,7 @@ class TestEnsureSymlinksCreatesLinks:
         worktree.mkdir()
         (repo_root / ".claude").mkdir()
 
-        ensure_symlinks(repo_root, worktree, [".claude"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         link = worktree / ".claude"
         assert link.is_symlink()
@@ -35,7 +35,7 @@ class TestEnsureSymlinksCreatesLinks:
         (repo_root / ".claude").mkdir()
         (repo_root / ".wiggum").mkdir()
 
-        ensure_symlinks(repo_root, worktree, [".claude", ".wiggum"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude", ".wiggum"])
 
         assert (worktree / ".claude").is_symlink()
         assert (worktree / ".wiggum").is_symlink()
@@ -50,7 +50,7 @@ class TestEnsureSymlinksSkipsWhenSourceMissing:
         repo_root.mkdir()
         worktree.mkdir()
 
-        ensure_symlinks(repo_root, worktree, [".nonexistent"])
+        ensure_symlinks(repo_root, worktree, directories=[".nonexistent"])
 
         assert not (worktree / ".nonexistent").exists()
 
@@ -61,7 +61,7 @@ class TestEnsureSymlinksSkipsWhenSourceMissing:
         worktree.mkdir()
         (repo_root / ".claude").mkdir()
 
-        ensure_symlinks(repo_root, worktree, [".claude", ".nonexistent"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude", ".nonexistent"])
 
         assert (worktree / ".claude").is_symlink()
         assert not (worktree / ".nonexistent").exists()
@@ -78,7 +78,7 @@ class TestEnsureSymlinksSkipsWhenTargetExists:
         (repo_root / ".claude").mkdir()
         (worktree / ".claude").mkdir()
 
-        ensure_symlinks(repo_root, worktree, [".claude"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         assert not (worktree / ".claude").is_symlink()
 
@@ -92,7 +92,7 @@ class TestEnsureSymlinksSkipsWhenTargetExists:
         other_target.mkdir()
         (worktree / ".claude").symlink_to(other_target)
 
-        ensure_symlinks(repo_root, worktree, [".claude"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         # Should not overwrite the existing symlink
         assert (worktree / ".claude").resolve() == other_target.resolve()
@@ -105,7 +105,7 @@ class TestEnsureSymlinksSkipsWhenTargetExists:
         (repo_root / ".claude").mkdir()
         (worktree / ".claude").write_text("occupied")
 
-        ensure_symlinks(repo_root, worktree, [".claude"])
+        ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         assert not (worktree / ".claude").is_symlink()
         assert (worktree / ".claude").read_text() == "occupied"
@@ -124,7 +124,7 @@ class TestEnsureSymlinksLogging:
         (repo_root / ".claude").mkdir()
 
         with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
-            ensure_symlinks(repo_root, worktree, [".claude"])
+            ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         created_records = [
             r
@@ -143,7 +143,7 @@ class TestEnsureSymlinksLogging:
         worktree.mkdir()
 
         with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
-            ensure_symlinks(repo_root, worktree, [".nonexistent"])
+            ensure_symlinks(repo_root, worktree, directories=[".nonexistent"])
 
         skipped_records = [
             r
@@ -164,7 +164,7 @@ class TestEnsureSymlinksLogging:
         (worktree / ".claude").mkdir()
 
         with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
-            ensure_symlinks(repo_root, worktree, [".claude"])
+            ensure_symlinks(repo_root, worktree, directories=[".claude"])
 
         skipped_records = [
             r
@@ -186,7 +186,9 @@ class TestEnsureSymlinksLogging:
         (worktree / ".wiggum").mkdir()
 
         with caplog.at_level(logging.INFO, logger="wiggum.worktree"):
-            ensure_symlinks(repo_root, worktree, [".claude", ".wiggum", ".missing"])
+            ensure_symlinks(
+                repo_root, worktree, directories=[".claude", ".wiggum", ".missing"]
+            )
 
         info_records = [r for r in caplog.records if r.levelno == logging.INFO]
         assert len(info_records) == 3
@@ -205,6 +207,6 @@ class TestEnsureSymlinksReturnValue:
         repo_root.mkdir()
         worktree.mkdir()
 
-        result = ensure_symlinks(repo_root, worktree, [])
+        result = ensure_symlinks(repo_root, worktree, directories=[])
 
         assert result is None

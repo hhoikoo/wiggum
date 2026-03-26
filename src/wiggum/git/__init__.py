@@ -63,6 +63,10 @@ class GitClient(Protocol):
         """Rebase onto the given ref, returning True on success, False on conflict."""
         ...
 
+    def rebase_continue(self) -> bool:
+        """Continue an in-progress rebase, returning True on success, False on conflict."""
+        ...
+
     def rebase_abort(self) -> None:
         """Abort an in-progress rebase."""
         ...

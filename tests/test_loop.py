@@ -584,6 +584,10 @@ class _InnerLoopGit:
         """Return True (no conflict)."""
         return True
 
+    def rebase_continue(self) -> bool:
+        """Return True (no conflict)."""
+        return True
+
     def rebase_abort(self) -> None:
         """No-op."""
 
