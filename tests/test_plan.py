@@ -13,6 +13,7 @@ from wiggum.plan import (
     mark_checked,
     parse_plan,
     remove_checked,
+    reset_all_checked,
 )
 
 SIMPLE_PLAN = textwrap.dedent("""\
@@ -510,3 +511,68 @@ class TestRemoveChecked:
         result = remove_checked(text)
         assert "[X] Done with uppercase" not in result
         assert "- [ ] Still pending" in result
+
+
+class TestResetAllChecked:
+    """Tests for reset_all_checked converting [x] back to [ ]."""
+
+    def test_resets_checked_to_unchecked(self) -> None:
+        result = reset_all_checked(PLAN_ALL_CHECKED_MULTI)
+        assert "- [x] Task A" not in result
+        assert "- [ ] Task A" in result
+        assert "- [ ] Task B" in result
+        assert "- [ ] Task C" in result
+
+    def test_preserves_already_unchecked(self) -> None:
+        result = reset_all_checked(PLAN_MIXED_FOR_REMOVE)
+        assert "- [ ] Pending task A" in result
+        assert "- [ ] Pending task B" in result
+
+    def test_mixed_plan_all_become_unchecked(self) -> None:
+        result = reset_all_checked(PLAN_MIXED_FOR_REMOVE)
+        plan = parse_plan(result)
+        checked = [item for s in plan.sections for item in s.items if item.checked]
+        assert checked == []
+
+    def test_mixed_plan_preserves_all_items(self) -> None:
+        result = reset_all_checked(PLAN_MIXED_FOR_REMOVE)
+        plan = parse_plan(result)
+        all_items = [item for s in plan.sections for item in s.items]
+        assert len(all_items) == 4
+
+    def test_no_checked_items_returns_unchanged(self) -> None:
+        result = reset_all_checked(PLAN_NONE_CHECKED)
+        assert result == PLAN_NONE_CHECKED
+
+    def test_preserves_plan_title(self) -> None:
+        result = reset_all_checked(PLAN_ALL_CHECKED_MULTI)
+        plan = parse_plan(result)
+        assert plan.title == "Plan"
+
+    def test_preserves_section_headers(self) -> None:
+        result = reset_all_checked(PLAN_ALL_CHECKED_MULTI)
+        plan = parse_plan(result)
+        titles = [s.title for s in plan.sections]
+        assert titles == ["Build", "Test"]
+
+    def test_uppercase_x_reset(self) -> None:
+        text = textwrap.dedent("""\
+            # Plan
+
+            ### Build
+            - [X] Done with uppercase
+            - [ ] Still pending
+        """)
+        result = reset_all_checked(text)
+        assert "- [X]" not in result
+        assert "- [ ] Done with uppercase" in result
+        assert "- [ ] Still pending" in result
+
+    def test_idempotent(self) -> None:
+        first = reset_all_checked(PLAN_MIXED_FOR_REMOVE)
+        second = reset_all_checked(first)
+        assert first == second
+
+    def test_empty_plan(self) -> None:
+        result = reset_all_checked(EMPTY_PLAN)
+        assert result == EMPTY_PLAN

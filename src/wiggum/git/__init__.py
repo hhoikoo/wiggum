@@ -55,6 +55,22 @@ class GitClient(Protocol):
         """Create a commit with the given message."""
         ...
 
+    def fetch(self, remote: str, branch: str) -> None:
+        """Fetch a branch from a remote."""
+        ...
+
+    def rebase(self, onto: str) -> bool:
+        """Rebase onto the given ref, returning True on success, False on conflict."""
+        ...
+
+    def rebase_abort(self) -> None:
+        """Abort an in-progress rebase."""
+        ...
+
+    def default_branch(self) -> str:
+        """Return the default branch name from origin/HEAD, falling back to main."""
+        ...
+
 
 GitPort = GitClient
 

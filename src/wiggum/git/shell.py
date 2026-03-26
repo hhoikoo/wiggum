@@ -99,5 +99,29 @@ class SubprocessGit:
         """Create a commit with the given message."""
         self._run("commit", "-m", message)
 
+    def fetch(self, remote: str, branch: str) -> None:
+        """Fetch a branch from a remote."""
+        self._run("fetch", remote, branch)
+
+    def rebase(self, onto: str) -> bool:
+        """Rebase the current branch onto the given ref."""
+        try:
+            self._run("rebase", onto)
+        except subprocess.CalledProcessError:
+            return False
+        return True
+
+    def rebase_abort(self) -> None:
+        """Abort an in-progress rebase."""
+        self._run("rebase", "--abort")
+
+    def default_branch(self) -> str:
+        """Return the default branch name from origin/HEAD or fall back to main."""
+        try:
+            ref = self._run("symbolic-ref", "refs/remotes/origin/HEAD")
+            return ref.removeprefix("refs/remotes/origin/")
+        except subprocess.CalledProcessError:
+            return "main"
+
 
 ShellGitAdapter = SubprocessGit

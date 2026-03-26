@@ -16,6 +16,7 @@ class WiggumConfig(BaseModel, frozen=True):
     cycle_limit: int = Field(default=0, ge=0)
     max_turns: int = Field(default=50, gt=0)
     agent_timeout: int = Field(default=600, gt=0)
+    base_branch: str | None = None
 
 
 def load_config(repo_path: Path) -> WiggumConfig:

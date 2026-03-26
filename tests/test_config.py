@@ -30,6 +30,10 @@ class TestWiggumConfigDefaults:
         cfg = WiggumConfig()
         assert cfg.agent_timeout == 600
 
+    def test_base_branch_default_is_none(self) -> None:
+        cfg = WiggumConfig()
+        assert cfg.base_branch is None
+
 
 class TestWiggumConfigCustomValues:
     """Tests for WiggumConfig with explicit field values."""
@@ -40,16 +44,26 @@ class TestWiggumConfigCustomValues:
             cycle_limit=3,
             max_turns=20,
             agent_timeout=300,
+            base_branch="develop",
         )
         assert cfg.batch_size == 5
         assert cfg.cycle_limit == 3
         assert cfg.max_turns == 20
         assert cfg.agent_timeout == 300
+        assert cfg.base_branch == "develop"
 
     def test_partial_override(self) -> None:
         cfg = WiggumConfig(batch_size=7)
         assert cfg.batch_size == 7
         assert cfg.cycle_limit == 0
+
+    def test_base_branch_set_to_string(self) -> None:
+        cfg = WiggumConfig(base_branch="main")
+        assert cfg.base_branch == "main"
+
+    def test_base_branch_explicit_none(self) -> None:
+        cfg = WiggumConfig(base_branch=None)
+        assert cfg.base_branch is None
 
 
 class TestWiggumConfigValidation:
@@ -84,6 +98,7 @@ class TestWiggumConfigImmutability:
 # -- load_config tests -------------------------------------------------------
 
 PROJECT_TOML = "batch_size = 5\nmax_turns = 20\n"
+PROJECT_TOML_WITH_BASE_BRANCH = 'batch_size = 5\nbase_branch = "develop"\n'
 HOME_TOML = "batch_size = 3\nmax_turns = 30\n"
 
 
@@ -124,6 +139,25 @@ class TestLoadConfigFromProject:
         cfg = load_config(project_with_config)
         assert cfg.cycle_limit == 0
         assert cfg.agent_timeout == 600
+
+
+class TestLoadConfigBaseBranch:
+    def test_base_branch_loaded_from_toml(self, tmp_path: Path) -> None:
+        from wiggum.config import load_config
+
+        cfg_dir = tmp_path / ".wiggum"
+        cfg_dir.mkdir()
+        (cfg_dir / "config.toml").write_text(PROJECT_TOML_WITH_BASE_BRANCH)
+        cfg = load_config(tmp_path)
+        assert cfg.base_branch == "develop"
+
+    def test_base_branch_defaults_to_none_when_omitted(
+        self, project_with_config: Path
+    ) -> None:
+        from wiggum.config import load_config
+
+        cfg = load_config(project_with_config)
+        assert cfg.base_branch is None
 
 
 class TestLoadConfigFallback:

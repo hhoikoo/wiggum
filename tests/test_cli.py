@@ -165,3 +165,152 @@ class TestRunWiring:
             app(["run", str(plan_file)], exit_on_error=False)
 
         mock_inner.assert_not_called()
+
+
+_PLAN_WITH_CHECKED = """\
+# Plan
+
+### Section A
+- [x] completed item one
+- [ ] pending item two
+- [x] completed item three
+
+### Section B
+- [ ] pending item four
+"""
+
+_PLAN_NO_CHECKED = """\
+# Plan
+
+### Section A
+- [ ] pending item one
+- [ ] pending item two
+"""
+
+_PLAN_ALL_CHECKED = """\
+# Plan
+
+### Section A
+- [x] completed item one
+- [x] completed item two
+
+### Section B
+- [x] completed item three
+"""
+
+_PLAN_EMPTY_SECTIONS = """\
+# Plan
+
+### Section A
+"""
+
+
+class TestSigintHandler:
+    """Tests that SIGINT during run resets checked items and exits 130."""
+
+    def _run_with_interrupt(self, tmp_path, plan_content):
+        """Run CLI with outer_loop raising KeyboardInterrupt, return (plan_file, exit_code)."""
+        plan_file = tmp_path / "plan.md"
+        plan_file.write_text(plan_content)
+        exit_code = None
+        with (
+            patch("wiggum.cli.validate_startup"),
+            patch("wiggum.cli.load_config", return_value=WiggumConfig()),
+            patch("wiggum.cli.outer_loop", side_effect=KeyboardInterrupt),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
+        ):
+            mock_git_cls.return_value.repo_root.return_value = tmp_path
+            try:
+                app(["run", str(plan_file)], exit_on_error=False)
+            except SystemExit as exc:
+                exit_code = exc.code
+            except KeyboardInterrupt:
+                pass
+        return plan_file, exit_code
+
+    def test_sigint_resets_checked_items_in_plan(self, tmp_path):
+        plan_file, _ = self._run_with_interrupt(tmp_path, _PLAN_WITH_CHECKED)
+        content = plan_file.read_text()
+        assert "[x]" not in content
+        assert "[X]" not in content
+        assert "[ ] completed item one" in content
+        assert "[ ] completed item three" in content
+
+    def test_sigint_preserves_unchecked_items(self, tmp_path):
+        plan_file, _ = self._run_with_interrupt(tmp_path, _PLAN_WITH_CHECKED)
+        content = plan_file.read_text()
+        assert "[ ] pending item two" in content
+        assert "[ ] pending item four" in content
+
+    def test_sigint_exits_with_code_130(self, tmp_path):
+        _, exit_code = self._run_with_interrupt(tmp_path, _PLAN_WITH_CHECKED)
+        assert exit_code == 130
+
+    def test_sigint_idempotent_no_checked_items(self, tmp_path):
+        plan_file, exit_code = self._run_with_interrupt(tmp_path, _PLAN_NO_CHECKED)
+        assert exit_code == 130
+        assert plan_file.read_text() == _PLAN_NO_CHECKED
+
+
+class TestSigintHandlerIdempotency:
+    """Tests that the SIGINT handler is safe to invoke multiple times."""
+
+    def _run_with_interrupt(self, tmp_path, plan_content):
+        """Run CLI with outer_loop raising KeyboardInterrupt, return (plan_file, exit_code)."""
+        plan_file = tmp_path / "plan.md"
+        plan_file.write_text(plan_content)
+        exit_code = None
+        with (
+            patch("wiggum.cli.validate_startup"),
+            patch("wiggum.cli.load_config", return_value=WiggumConfig()),
+            patch("wiggum.cli.outer_loop", side_effect=KeyboardInterrupt),
+            patch("wiggum.cli.SubprocessGit") as mock_git_cls,
+            patch("wiggum.cli.SubprocessAgent"),
+        ):
+            mock_git_cls.return_value.repo_root.return_value = tmp_path
+            try:
+                app(["run", str(plan_file)], exit_on_error=False)
+            except SystemExit as exc:
+                exit_code = exc.code
+            except KeyboardInterrupt:
+                pass
+        return plan_file, exit_code
+
+    def test_second_interrupt_produces_same_result_as_first(self, tmp_path):
+        """Resetting an already-reset plan is a no-op."""
+        plan_file, _ = self._run_with_interrupt(tmp_path, _PLAN_WITH_CHECKED)
+        after_first = plan_file.read_text()
+
+        _, exit_code = self._run_with_interrupt(tmp_path, after_first)
+        after_second = plan_file.read_text()
+
+        assert after_first == after_second
+        assert exit_code == 130
+
+    def test_interrupt_on_all_checked_plan_resets_all(self, tmp_path):
+        """All checked items become unchecked after interrupt."""
+        plan_file, exit_code = self._run_with_interrupt(tmp_path, _PLAN_ALL_CHECKED)
+        content = plan_file.read_text()
+        assert "[x]" not in content
+        assert "[ ] completed item one" in content
+        assert "[ ] completed item two" in content
+        assert "[ ] completed item three" in content
+        assert exit_code == 130
+
+    def test_interrupt_twice_on_all_checked_is_stable(self, tmp_path):
+        """After first interrupt resets all items, second leaves plan unchanged."""
+        plan_file, _ = self._run_with_interrupt(tmp_path, _PLAN_ALL_CHECKED)
+        after_first = plan_file.read_text()
+
+        _, exit_code = self._run_with_interrupt(tmp_path, after_first)
+        after_second = plan_file.read_text()
+
+        assert after_first == after_second
+        assert exit_code == 130
+
+    def test_interrupt_on_empty_section_plan(self, tmp_path):
+        """Handler on a plan with sections but no items does not error."""
+        plan_file, exit_code = self._run_with_interrupt(tmp_path, _PLAN_EMPTY_SECTIONS)
+        assert plan_file.read_text() == _PLAN_EMPTY_SECTIONS
+        assert exit_code == 130

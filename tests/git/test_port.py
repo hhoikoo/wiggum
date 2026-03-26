@@ -52,6 +52,18 @@ class _ConformingAdapter:
     def diff_names(self) -> Sequence[str]:
         return []
 
+    def fetch(self, remote: str, branch: str) -> None:
+        return
+
+    def rebase(self, onto: str) -> bool:
+        return True
+
+    def rebase_abort(self) -> None:
+        return
+
+    def default_branch(self) -> str:
+        return "main"
+
 
 class _MissingMethodAdapter:
     def current_branch(self) -> str:
@@ -108,3 +120,19 @@ def test_stage_all_defined():
 
 def test_diff_names_defined():
     assert callable(getattr(GitPort, "diff_names", None))
+
+
+def test_fetch_defined():
+    assert callable(getattr(GitPort, "fetch", None))
+
+
+def test_rebase_defined():
+    assert callable(getattr(GitPort, "rebase", None))
+
+
+def test_rebase_abort_defined():
+    assert callable(getattr(GitPort, "rebase_abort", None))
+
+
+def test_default_branch_defined():
+    assert callable(getattr(GitPort, "default_branch", None))

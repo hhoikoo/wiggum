@@ -456,6 +456,20 @@ class _OuterLoopGit:
     def commit(self, message: str) -> None:
         """No-op."""
 
+    def fetch(self, remote: str, branch: str) -> None:
+        """No-op."""
+
+    def rebase(self, onto: str) -> bool:
+        """Return True (success)."""
+        return True
+
+    def rebase_abort(self) -> None:
+        """No-op."""
+
+    def default_branch(self) -> str:
+        """Return main."""
+        return "main"
+
 
 class _OuterLoopAgent:
     """Minimal agent port for outer_loop tests."""

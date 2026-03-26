@@ -129,3 +129,12 @@ def remove_checked(text: str) -> str:
     """Delete all checked items from plan markdown."""
     lines = text.splitlines(keepends=True)
     return "".join(line for line in lines if not _CHECKED_RE.match(line))
+
+
+_CHECKED_MARKER_RE = re.compile(r"(\s*- )\[[xX]\]( .+)$")
+
+
+def reset_all_checked(text: str) -> str:
+    """Convert all [x] marks back to [ ] without removing items."""
+    lines = text.splitlines(keepends=True)
+    return "".join(_CHECKED_MARKER_RE.sub(r"\1[ ]\2", line) for line in lines)

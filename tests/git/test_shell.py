@@ -305,3 +305,175 @@ class TestCommit:
             check=True,
         )
         assert "test commit message" in result.stdout
+
+
+def _run_git(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.rstrip()
+
+
+@pytest.fixture
+def cloned_repo(tmp_path: Path) -> tuple[Path, Path]:
+    """Create an upstream repo and a local clone with origin configured."""
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    _run_git(upstream, "init", "--bare")
+
+    local = tmp_path / "local"
+    _run_git(tmp_path, "clone", str(upstream), "local")
+    _run_git(local, "config", "user.email", "test@test.com")
+    _run_git(local, "config", "user.name", "Test")
+    (local / "initial.txt").write_text("hello")
+    _run_git(local, "add", ".")
+    _run_git(local, "commit", "-m", "initial commit")
+    _run_git(local, "push", "-u", "origin", "HEAD")
+    return upstream, local
+
+
+class TestFetch:
+    def test_fetch_retrieves_remote_commits(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        upstream, local = cloned_repo
+        # Create a second clone, push a new commit, then fetch from the first
+        second = local.parent / "second"
+        _run_git(local.parent, "clone", str(upstream), "second")
+        _run_git(second, "config", "user.email", "test@test.com")
+        _run_git(second, "config", "user.name", "Test")
+        (second / "new.txt").write_text("from second clone")
+        _run_git(second, "add", ".")
+        _run_git(second, "commit", "-m", "second clone commit")
+        branch = _run_git(second, "rev-parse", "--abbrev-ref", "HEAD")
+        _run_git(second, "push", "origin", branch)
+
+        adapter = ShellGitAdapter(repo_path=local)
+        adapter.fetch("origin", branch)
+
+        # The remote-tracking ref should now include the new commit
+        log = _run_git(local, "log", "--oneline", f"origin/{branch}")
+        assert "second clone commit" in log
+
+    def test_fetch_raises_on_invalid_remote(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        with pytest.raises(subprocess.CalledProcessError):
+            adapter.fetch("nonexistent", "main")
+
+
+class TestRebase:
+    def test_rebase_returns_true_on_success(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        branch = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+        # Create a feature branch with one commit
+        _run_git(local, "checkout", "-b", "feat/rebase-test")
+        (local / "feature.txt").write_text("feature work")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature commit")
+
+        adapter = ShellGitAdapter(repo_path=local)
+        result = adapter.rebase(branch)
+
+        assert result is True
+
+    def test_rebase_returns_false_on_conflict(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        branch = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+        # Create a feature branch that modifies the same file differently
+        _run_git(local, "checkout", "-b", "feat/conflict-test")
+        (local / "initial.txt").write_text("feature version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature change")
+
+        # Go back to main and make a conflicting change
+        _run_git(local, "checkout", branch)
+        (local / "initial.txt").write_text("main version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "main change")
+
+        # Switch to feature and rebase onto main -- should conflict
+        _run_git(local, "checkout", "feat/conflict-test")
+        adapter = ShellGitAdapter(repo_path=local)
+        result = adapter.rebase(branch)
+
+        assert result is False
+
+
+class TestRebaseAbort:
+    def test_rebase_abort_cleans_up_conflict(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        branch = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+        _run_git(local, "checkout", "-b", "feat/abort-test")
+        (local / "initial.txt").write_text("feature version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "feature change")
+
+        _run_git(local, "checkout", branch)
+        (local / "initial.txt").write_text("main version")
+        _run_git(local, "add", ".")
+        _run_git(local, "commit", "-m", "main change")
+
+        _run_git(local, "checkout", "feat/abort-test")
+        # Start a conflicting rebase manually
+        subprocess.run(
+            ["git", "rebase", branch],
+            cwd=local,
+            capture_output=True,
+            check=False,
+        )
+
+        adapter = ShellGitAdapter(repo_path=local)
+        adapter.rebase_abort()
+
+        # After abort, branch should be back to feat/abort-test
+        current = _run_git(local, "rev-parse", "--abbrev-ref", "HEAD")
+        assert current == "feat/abort-test"
+
+
+class TestDefaultBranch:
+    def test_reads_default_from_origin_head(
+        self,
+        cloned_repo: tuple[Path, Path],
+    ) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        _upstream, local = cloned_repo
+        adapter = ShellGitAdapter(repo_path=local)
+        result = adapter.default_branch()
+
+        # The clone should have origin/HEAD pointing to the default branch
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_falls_back_to_main(self, git_repo: Path) -> None:
+        from wiggum.git.shell import ShellGitAdapter
+
+        # git_repo has no remote, so origin/HEAD does not exist
+        adapter = ShellGitAdapter(repo_path=git_repo)
+        result = adapter.default_branch()
+
+        assert result == "main"
