@@ -41,14 +41,14 @@ Rules:
 9. **Push or prompt:**
    - Run `git status` and check if the branch is ahead of a remote tracking branch (e.g., "Your branch is ahead of 'origin/...'").
    - If ahead of remote, run `git push`.
-   - If no remote tracking branch, tell the user to run the `/create-pr` skill when ready.
+   - If no remote tracking branch, tell the user to run the `/wiggum:create-pr` skill when ready.
 10. **Documentation check:**
     - Check if a PR exists for the current branch: gh pr view --json number 2>/dev/null.
-    - If no PR exists yet, skip this step -- the documentation check will run as part of the `/create-pr` skill when the PR is created.
+    - If no PR exists yet, skip this step -- the documentation check will run as part of the `/wiggum:create-pr` skill when the PR is created.
     - If a PR exists, resolve the base branch via `.claude/scripts/resolve-base-branch.sh`, then run `git diff <base>...HEAD --stat` and `git diff <base>...HEAD` to understand the full scope of changes.
     - Determine whether updates are needed to README, CLAUDE.md, inline docs, or other developer-facing documentation. Consider: new public APIs, changed behavior, architectural shifts, new dependencies, or changes to hooks/skills/agents/config. Internal refactors, test additions, and bug fixes that restore documented behavior do not warrant doc updates.
     - If documentation changes are recommended, present each to the user via AskUserQuestion (approve/reject) and apply only the approved edits.
     - If updates are needed, apply them, commit (following project commit conventions), and push.
-    - **Skip if already run recently:** If a documentation check has already been performed earlier in the same pipeline run (e.g., during `quick-push`), skip this step. The `/create-pr` skill will run the final documentation check.
+    - **Skip if already run recently:** If a documentation check has already been performed earlier in the same pipeline run (e.g., during `quick-push`), skip this step. The `/wiggum:create-pr` skill will run the final documentation check.
 
 $ARGUMENTS

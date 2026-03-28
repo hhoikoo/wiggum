@@ -5,6 +5,18 @@
         "pr": ""
     },
     "includeCoAuthoredBy": false,
+    "enabledPlugins": {
+        "wiggum@wiggum": true
+    },
+    "extraKnownMarketplaces": {
+        "wiggum": {
+            "source": {
+                "source": "github",
+                "repo": "hhoikoo/wiggum"
+            },
+            "autoUpdate": true
+        }
+    },
     "permissions": {
         "deny": [
             "Read(.env)",

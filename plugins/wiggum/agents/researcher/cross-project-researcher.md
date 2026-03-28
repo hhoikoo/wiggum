@@ -1,6 +1,7 @@
 ---
 name: cross-project-researcher
 description: Read-only research agent that explores another project's codebase to find patterns, conventions, and implementation examples relevant to the current task.
+model: sonnet
 tools:
   - Bash
   - Glob

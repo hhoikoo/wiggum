@@ -1,11 +1,6 @@
----
-paths:
-  - "plugins/**/*.sh"
-  - ".claude/hooks/*.sh"
----
 # Shell Script Conventions
 
-Rules for deterministic shell scripts in `plugins/` and `.claude/hooks/`.
+Rules for deterministic shell scripts.
 
 ## Header
 

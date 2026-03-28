@@ -50,7 +50,7 @@ Assign a confidence score (0-100%) that the comment identifies a real issue.
 
 - Make the code changes.
 - Run `uv run pre-commit run --all-files` to verify the fix.
-- Commit using the `/commit` skill (MUST delegate, never commit directly).
+- Commit using the `/wiggum:commit` skill (MUST delegate, never commit directly).
 - Group related fixes into a single commit when they address the same concern.
 
 ### 5. Reply and Resolve Threads
@@ -77,7 +77,7 @@ Print a table:
 
 ## Rules
 
-- Always delegate commits to the `/commit` skill.
+- Always delegate commits to the `/wiggum:commit` skill.
 - No AI attribution in replies or commits.
 - When disagreeing with a comment, be direct but respectful. Cite specific code or docs.
 

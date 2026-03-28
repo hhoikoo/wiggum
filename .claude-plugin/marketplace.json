@@ -1,0 +1,16 @@
+{
+  "name": "wiggum",
+  "owner": { "name": "wiggum" },
+  "metadata": {
+    "description": "Ralph Loop autonomous software engineering. PRD proposal drafting with parallel research and iterative document generation."
+  },
+  "plugins": [
+    {
+      "name": "wiggum",
+      "source": "./plugins/wiggum",
+      "description": "Ralph Loop PRD skills: interactive proposal drafting and autonomous PRD generation with parallel research.",
+      "keywords": ["ralph", "proposal", "prd", "research", "tmux", "worktree"],
+      "category": "ralph"
+    }
+  ]
+}

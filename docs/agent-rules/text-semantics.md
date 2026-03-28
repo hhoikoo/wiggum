@@ -1,7 +1,3 @@
----
-paths:
-  - "**/*"
----
 # Text Semantics
 
 Rules for written content in code comments, docstrings, commit messages, and documentation.

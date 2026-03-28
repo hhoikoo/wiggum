@@ -1,7 +1,3 @@
----
-paths:
-  - "**/*"
----
 # Text Syntax
 
 ## Encoding
