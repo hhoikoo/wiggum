@@ -1,0 +1,7 @@
+{
+  "name": "wiggum",
+  "description": "Ralph Loop PRD skills: interactive proposal drafting and autonomous PRD generation with parallel research.",
+  "author": { "name": "wiggum" },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/hhoikoo/wiggum"
+}
