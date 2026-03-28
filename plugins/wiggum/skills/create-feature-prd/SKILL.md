@@ -86,10 +86,10 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 
 ## Phase 6: Create PR
 
-16. Commit the PRD and research docs. Delegate to `/commit`:
+16. Commit the PRD and research docs. Delegate to `/wiggum:commit`:
     - Format: `docs(<ticket-id>): <feature-name>`
 
-17. Push and create PR. Delegate to `/create-pr`:
+17. Push and create PR. Delegate to `/wiggum:create-pr`:
     - Title: `docs(<ticket-id>): <feature-name>`
     - Body: executive summary + link to the PRD file in the repo
     - Link PR to the tracking issue
@@ -101,7 +101,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 - This skill is an orchestrator. Never load full research or full PRD text into the main context. Always delegate to subagents for reading and writing heavy content.
 - All research agents must be launched in a single message for parallel execution.
 - Each subagent gets a focused, self-contained task. Do not pass the entire conversation history.
-- Always delegate commits to the `/commit` skill and PR creation to the `/create-pr` skill.
+- Always delegate commits to the `/wiggum:commit` skill and PR creation to the `/wiggum:create-pr` skill.
 - If a research agent fails, log the failure and continue with the remaining results. Do not retry.
 
 $ARGUMENTS

@@ -20,7 +20,7 @@ Keep the back-and-forth brief -- 2-3 rounds max. Produce a polished feature summ
 
 ## Phase 2: Create Tracking Ticket
 
-Delegate to the `/create-issue` skill to create a GitHub issue:
+Delegate to the `/wiggum:create-issue` skill to create a GitHub issue:
 
 - **Type**: Story (or Epic if the user indicates this is a large feature)
 - **Title**: concise feature name in imperative form
@@ -64,7 +64,7 @@ The session will create a PR with the PRD when ready.
 
 - Do not use AskUserQuestion for the initial feature description. Use plain conversational text.
 - Do not skip Phase 1 even if the user provides a detailed description. At minimum, confirm the scope.
-- Always delegate issue creation to the `/create-issue` skill. Never create issues directly.
+- Always delegate issue creation to the `/wiggum:create-issue` skill. Never create issues directly.
 - The spawned session runs independently. Do not wait for it to complete.
 
 $ARGUMENTS

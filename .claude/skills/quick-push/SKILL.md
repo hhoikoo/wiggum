@@ -45,11 +45,11 @@ Run `uv run pre-commit run --all-files` (format + lint + test). If it fails, fix
 
 ### 4. Commit
 
-Invoke the `/commit` skill. One logical commit covering all changes.
+Invoke the `/wiggum:commit` skill. One logical commit covering all changes.
 
 ### 5. Create PR
 
-Invoke the `/create-pr` skill with `--no-review`. This pushes the branch and opens a PR without requesting reviews.
+Invoke the `/wiggum:create-pr` skill with `--no-review`. This pushes the branch and opens a PR without requesting reviews.
 
 ### 6. Report
 

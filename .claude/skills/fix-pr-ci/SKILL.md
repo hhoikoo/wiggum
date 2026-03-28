@@ -54,7 +54,7 @@ Read the failure logs and categorize the failure:
 
 ### 5. Commit and Push
 
-- Invoke the `/commit` skill. The `/commit` skill handles pushing when a PR exists.
+- Invoke the `/wiggum:commit` skill. The `/wiggum:commit` skill handles pushing when a PR exists.
 
 ### 6. Verify
 

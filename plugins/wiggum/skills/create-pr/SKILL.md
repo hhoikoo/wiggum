@@ -36,7 +36,7 @@ Create a pull request following project conventions.
    - If remote tracking exists but local is ahead, `git push`.
 
 3. **Generate PR title:**
-   - Follow the same format as commit subject lines from `/commit`: `<type>(BA-XXXX): <short description>` or `<type>: <short description>`.
+   - Follow the same format as commit subject lines from `/wiggum:commit`: `<type>(BA-XXXX): <short description>` or `<type>: <short description>`.
    - Derive the type from the branch prefix (e.g., `feat/BA-1234/add-state-machine` -> `feat`).
    - Extract the ticket ID from the branch name if present (e.g., `feat/<ticket-id>/add-widget` -> `<ticket-id>`).
    - Derive the description from the branch short-name or commit messages. Capitalize first letter, no period, imperative mood.
@@ -75,7 +75,7 @@ Create a pull request following project conventions.
    - Determine whether updates are needed to README, CLAUDE.md, inline docs, or other developer-facing documentation. Consider: new public APIs, changed behavior, architectural shifts, new dependencies, or changes to hooks/skills/agents/config. Internal refactors, test additions, and bug fixes that restore documented behavior do not warrant doc updates.
    - If documentation changes are recommended, present each to the user via AskUserQuestion (approve/reject) and apply only the approved edits.
    - If updates are needed, apply them, commit (following project commit conventions), and push before reporting.
-   - **Skip if already run recently:** If a documentation check was already performed on the same set of commits earlier in this pipeline run (e.g., by the `/commit` skill), skip this step.
+   - **Skip if already run recently:** If a documentation check was already performed on the same set of commits earlier in this pipeline run (e.g., by the `/wiggum:commit` skill), skip this step.
 
 8. **Report:**
    - Print using this template:

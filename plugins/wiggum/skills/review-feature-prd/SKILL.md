@@ -75,7 +75,7 @@ This skill is an **orchestrator**. The main context triages comments (lightweigh
 
 ## Phase 5: Commit and Report
 
-9. If any PRD files were modified, commit and push. Delegate to `/commit`:
+9. If any PRD files were modified, commit and push. Delegate to `/wiggum:commit`:
    - Format: `docs(<ticket-id>): address review feedback`
 
 10. Print a summary table:
@@ -90,7 +90,7 @@ This skill is an **orchestrator**. The main context triages comments (lightweigh
 
 - This skill is stateless and idempotent. Safe to call repeatedly. Each invocation re-fetches all unresolved comments.
 - The main context triages and coordinates. Subagents handle reading/writing the PRD and composing replies.
-- Always delegate commits to the `/commit` skill.
+- Always delegate commits to the `/wiggum:commit` skill.
 - Always reply before resolving a thread -- every comment gets a response for audit trail.
 - Do not ask the user for each comment decision. This skill is autonomous.
 
