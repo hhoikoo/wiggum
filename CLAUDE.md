@@ -2,7 +2,7 @@
 
 ## Delegation Policy
 
-**STRICT RULE -- no exceptions.** When a skill (`.claude/skills/`) or agent (`.claude/agents/`) exists for a task, you MUST delegate to it. Never perform the task inline. Before performing any non-trivial action, check whether a matching skill or agent exists and use it.
+**STRICT RULE -- no exceptions.** When a skill (`.claude/skills/` or `plugins/wiggum/skills/`) or agent (`.claude/agents/` or `plugins/wiggum/agents/`) exists for a task, you MUST delegate to it. Never perform the task inline. Before performing any non-trivial action, check whether a matching skill or agent exists and use it.
 
 Rationale: skills and agents carry project-specific conventions and workflows that must not be bypassed or approximated from memory.
 
@@ -34,7 +34,23 @@ uv run pre-commit run --all-files          # run all hooks
 ## Layout
 
 ```
-src/wiggum/    # package source
-tests/         # test files mirror src/ structure
-scripts/       # shell scripts
+src/wiggum/                  # package source
+tests/                       # test files mirror src/ structure
+plugins/wiggum/              # wiggum Claude Code plugin (marketplace)
+  skills/                    # plugin skills (invoke as /wiggum:<name>)
+  agents/                    # plugin agents (researcher/, prd-writer)
+  scripts/                   # shared shell scripts (symlinked into skills)
+  hooks/                     # plugin hook configuration
+bin/                         # convenience symlinks (claude-dev)
+.claude-plugin/              # marketplace manifest
+.wiggum/                     # runtime artifacts (specs, research)
 ```
+
+## Plugin Development
+
+```
+./bin/claude-dev                           # launch claude with local plugin
+./bin/claude-dev --resume                  # resume a previous session
+```
+
+Plugin skills are namespaced: `/wiggum:propose-feature`, `/wiggum:create-feature-prd`, `/wiggum:review-feature-prd`.
