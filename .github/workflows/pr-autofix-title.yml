@@ -1,0 +1,55 @@
+name: PR Autofix Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  autofix-title:
+    name: Autofix PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix PR title from branch name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const branch = pr.head.ref;
+            const title = pr.title;
+
+            // Skip if title already looks conventional
+            const conventionalRe = /^(feat|fix|docs?|refactor|ci|chore|release|test|deps|perf)(\(#\d+\))?:/;
+            if (conventionalRe.test(title)) {
+              console.log('Title already follows convention');
+              return;
+            }
+
+            // Parse branch: type/issue-number/short-name or type/short-name
+            const branchRe = /^(feat|fix|docs?|refactor|ci|chore|release|test|deps|perf)\/(?:(\d+)\/)?(.+)$/;
+            const match = branch.match(branchRe);
+            if (!match) {
+              console.log(`Branch "${branch}" does not match expected pattern`);
+              return;
+            }
+
+            const [, type, issue, slug] = match;
+            const description = slug.replace(/-/g, ' ');
+            const scope = issue ? `(#${issue})` : '';
+            const newTitle = `${type}${scope}: ${description.charAt(0).toUpperCase() + description.slice(1)}`;
+
+            if (newTitle === title) {
+              console.log('Title already matches');
+              return;
+            }
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              title: newTitle,
+            });
+            console.log(`Updated title to: ${newTitle}`);

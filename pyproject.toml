@@ -1,0 +1,208 @@
+[project]
+name = "wiggum"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+authors = [
+  { name = "Hyunhoi Koo", email = "hhoikoo00@gmail.com" },
+]
+requires-python = ">=3.14"
+license = "Apache-2.0"
+dependencies = [
+  "cyclopts>=4,<5",
+  "pydantic>=2,<3",
+]
+
+[project.scripts]
+wiggum = "wiggum.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11,<1"]
+build-backend = "uv_build"
+
+# ---------------------------------------------------------------------------
+# Dependency groups
+# ---------------------------------------------------------------------------
+[dependency-groups]
+dev = [
+  "ruff>=0.11,<1",
+  "pyright>=1.1,<2",
+  "pytest>=9,<10",
+  "pytest-cov>=7,<8",
+  "pre-commit>=4,<5",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff -- linting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "F",      # pyflakes
+  "E",      # pycodestyle errors
+  "W",      # pycodestyle warnings
+  "C90",    # mccabe complexity
+  "I",      # isort
+  "N",      # pep8-naming
+  "D",      # pydocstyle
+  "UP",     # pyupgrade
+  "YTT",    # flake8-2020
+  "ANN",    # flake8-annotations
+  "ASYNC",  # flake8-async
+  "S",      # flake8-bandit
+  "BLE",    # flake8-blind-except
+  "FBT",    # flake8-boolean-trap
+  "B",      # flake8-bugbear
+  "A",      # flake8-builtins
+  "COM",    # flake8-commas
+  "C4",     # flake8-comprehensions
+  "DTZ",    # flake8-datetimez
+  "T10",    # flake8-debugger
+  "EM",     # flake8-errmsg
+  "EXE",    # flake8-executable
+  "ISC",    # flake8-implicit-str-concat
+  "ICN",    # flake8-import-conventions
+  "LOG",    # flake8-logging
+  "G",      # flake8-logging-format
+  "INP",    # flake8-no-pep420
+  "PIE",    # flake8-pie
+  "T20",    # flake8-print
+  "PYI",    # flake8-pyi
+  "PT",     # flake8-pytest-style
+  "Q",      # flake8-quotes
+  "RSE",    # flake8-raise
+  "RET",    # flake8-return
+  "SLF",    # flake8-self
+  "SLOT",   # flake8-slots
+  "SIM",    # flake8-simplify
+  "TID",    # flake8-tidy-imports
+  "TC",     # flake8-type-checking
+  "ARG",    # flake8-unused-arguments
+  "PTH",    # flake8-use-pathlib
+  "TD",     # flake8-todos
+  "FIX",    # flake8-fixme
+  "ERA",    # eradicate
+  "PGH",    # pygrep-hooks
+  "PL",     # pylint
+  "TRY",    # tryceratops
+  "FLY",    # flynt
+  "PERF",   # perflint
+  "FURB",   # refurb
+  "RUF",    # ruff-specific
+]
+ignore = [
+  "E501",    # line too long -- formatter handles wrapping
+  "D100",    # missing docstring in public module
+  "D104",    # missing docstring in public package
+  "D203",    # one-blank-line-before-class (conflicts with D211)
+  "D213",    # multi-line-summary-second-line (conflicts with D212)
+  "COM812",  # missing trailing comma (conflicts with formatter)
+  "ISC001",  # single-line implicit string concat (conflicts with formatter)
+  "PLR0913", # too many arguments -- often unavoidable
+  "TD003",   # missing issue link in TODO
+  "FIX002",  # line contains TODO
+]
+fixable = ["ALL"]
+unfixable = [
+  "ERA",  # don't auto-delete commented-out code -- requires human review
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "S101",    # assert is expected in tests
+  "PLR2004", # magic values in tests are fine
+  "PLC0415", # import inside functions is fine in tests
+  "T20",     # print in tests is fine
+  "ANN",     # type annotations not required in tests
+  "D",       # docstrings not required in tests
+  "ARG",     # unused arguments are fine in test fixtures
+  "FBT",     # boolean positional args are fine in tests
+  "SLF001",  # private member access is fine in tests
+  "A002",    # shadowing builtins is fine in test helpers
+  "A004",    # re-importing shadowed builtins is fine in tests
+  "B017",    # blind exception assertions acceptable in tests
+  "PT011",   # broad pytest.raises is fine in tests
+  "PT012",   # multi-statement pytest.raises blocks are common
+  "S603",    # subprocess calls expected in test fixtures
+  "S607",    # partial executable paths standard in tests
+  "PERF401", # list.append in async-for loops cannot be replaced
+  "S106",    # hardcoded passwords expected in test fixtures
+]
+"__init__.py" = [
+  "F401",  # unused imports are re-exports
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-decorators = ["dataclasses.dataclass"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["wiggum"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# Pyright -- type checking
+# ---------------------------------------------------------------------------
+[tool.pyright]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+include = ["src"]
+exclude = ["**/__pycache__", ".venv", "build", "dist"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+  "-ra",
+  "--strict-markers",
+  "--strict-config",
+  "-x",
+]
+filterwarnings = [
+  "error",
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks integration tests",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["src/wiggum"]
+branch = true
+omit = ["src/wiggum/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 80
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.",
+  "@overload",
+  "raise NotImplementedError",
+]

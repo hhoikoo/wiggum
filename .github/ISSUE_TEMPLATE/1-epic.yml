@@ -1,0 +1,35 @@
+name: Epic
+description: Multi-issue feature requiring sub-issue breakdown and coordination.
+labels: ["type:epic"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: High-level description of the epic and its goals.
+    validations:
+      required: true
+  - type: textarea
+    id: sub-issues
+    attributes:
+      label: Sub-issues
+      description: Planned breakdown of work items (stories/tasks). Include a dependency graph if applicable.
+      placeholder: |
+        - [ ] #__ Story: ...
+        - [ ] #__ Task: ...
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What does "done" look like for this epic?
+    validations:
+      required: true
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: Technical Notes
+      description: Architectural context, affected modules, dependencies, risks.
+    validations:
+      required: false
