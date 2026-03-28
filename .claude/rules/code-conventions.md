@@ -2,6 +2,7 @@
 paths:
   - "plugins/**/*"
   - "src/**/*"
+  - "tests/**/*"
 ---
 # Code Conventions
 

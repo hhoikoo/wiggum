@@ -1,7 +1,8 @@
 ---
 paths:
-  - "src/**/*.py"
-  - "scripts/**/*.py"
+  - "**/*.py"
+  - "src/**/*"
+  - "tests/**/*"
 ---
 # Python Conventions
 

@@ -33,7 +33,7 @@ Capture the issue number from the skill output.
 Launch a background Claude session in tmux to generate the PRD autonomously:
 
 ```bash
-bash ${CLAUDE_SKILL_DIR}/session-launch.sh \
+bash ${CLAUDE_SKILL_DIR}/scripts/session-launch.sh \
   --ticket-id <ticket-id> \
   --repo-path "$(git rev-parse --show-toplevel)" \
   --base-branch main \

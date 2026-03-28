@@ -22,7 +22,7 @@ This skill is an **orchestrator**. The main context triages comments (lightweigh
 
 3. Fetch all review comments on the PR:
    ```bash
-   bash ${CLAUDE_SKILL_DIR}/fetch-issue.sh <ticket-id>
+   bash ${CLAUDE_SKILL_DIR}/scripts/fetch-issue.sh <ticket-id>
    ```
 
    ```bash

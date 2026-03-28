@@ -16,7 +16,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 
 2. Fetch the issue body:
    ```bash
-   bash ${CLAUDE_SKILL_DIR}/fetch-issue.sh <ticket-id>
+   bash ${CLAUDE_SKILL_DIR}/scripts/fetch-issue.sh <ticket-id>
    ```
    Store the `summary` and `description` fields. This is the polished feature summary from `/wiggum:propose-feature`.
 

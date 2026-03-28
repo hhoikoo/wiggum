@@ -54,3 +54,24 @@ bin/                         # convenience symlinks (claude-dev)
 ```
 
 Plugin skills are namespaced: `/wiggum:propose-feature`, `/wiggum:create-feature-prd`, `/wiggum:review-feature-prd`.
+
+## Verify Before Assuming
+
+Never rely on memory or training data when a definitive source is available. Look it up. This applies to library APIs, external projects, standards, protocols, and any factual assertion.
+
+- Read the actual source or docs for function signatures, return types, and defaults.
+- Use web search or `gh` before making claims about external projects.
+- Never hardcode or guess versions -- read them from the source of truth.
+
+| Information needed | Check this file |
+|-------------------|-----------------|
+| Plugin versions | `.claude-plugin/marketplace.json` |
+| CI pipeline | `.github/workflows/*.yml` |
+
+## Global Conventions
+
+Refer to these for writing style and conventions that apply across all file types:
+
+- @docs/agent-rules/text-semantics.md
+- @docs/agent-rules/text-syntax.md
+- @docs/agent-rules/shell-scripts-conventions.md

@@ -8,27 +8,29 @@ Rules for SKILL.md files inside plugin skill directories.
 
 ## Script Path Resolution
 
-Use `${CLAUDE_SKILL_DIR}` to reference scripts in the skill directory. Do not use `${CLAUDE_PLUGIN_ROOT}` -- it has multiple open bugs (anthropics/claude-code#38699, #9354) where it resolves inconsistently between marketplace and local installs.
+Use `${CLAUDE_SKILL_DIR}` to reference scripts in the skill's `scripts/` subdirectory. Do not use `${CLAUDE_PLUGIN_ROOT}` -- it has multiple open bugs (anthropics/claude-code#38699, #9354) where it resolves inconsistently between marketplace and local installs.
 
 `${CLAUDE_SKILL_DIR}` was added in v2.1.69 and works reliably in skill body content. It resolves to the absolute path of the directory containing the SKILL.md file.
 
 ```
-bash ${CLAUDE_SKILL_DIR}/session-launch.sh --ticket-id 42
+bash ${CLAUDE_SKILL_DIR}/scripts/session-launch.sh --ticket-id 42
 ```
 
-## Per-Script Symlinks for Shared Scripts
+## Skill Directory Structure
 
-Shared scripts live in `plugins/<plugin>/scripts/`. Each skill directory symlinks the individual scripts it needs:
+Each skill follows the Agent Skills standard layout with a `scripts/` subdirectory:
 
 ```
 skills/propose-feature/
 ├── SKILL.md
-├── session-launch.sh -> ../../scripts/session-launch.sh   # shared
-├── fetch-issue.sh -> ../../scripts/fetch-issue.sh          # shared
-└── validate-input.sh                                        # skill-specific
+├── reference.md                                                  # optional supporting files
+└── scripts/
+    ├── session-launch.sh -> ../../../scripts/session-launch.sh   # shared (symlink)
+    ├── fetch-issue.sh -> ../../../scripts/fetch-issue.sh         # shared (symlink)
+    └── validate-input.sh                                          # skill-specific
 ```
 
-Symlink individual files, not the entire `scripts/` directory. This allows skill-specific scripts to coexist alongside shared ones. `${CLAUDE_SKILL_DIR}/script.sh` works uniformly for both.
+Shared scripts live in `plugins/<plugin>/scripts/`. Each skill symlinks the individual shared scripts it needs into its own `scripts/` subdirectory. Skill-specific scripts live directly in the same `scripts/` subdirectory alongside the symlinks.
 
 Git preserves symlinks, so this works in both local dev (`--plugin-dir`) and marketplace installs on macOS/Linux. When installed via marketplace, Claude Code dereferences symlinks during the cache copy -- the cached skill directory contains real files, not symlinks.
 
