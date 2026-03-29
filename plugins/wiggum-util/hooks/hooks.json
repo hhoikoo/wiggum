@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/guard-destructive-commands.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/guard-destructive-commands.sh",
             "timeout": 5000
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/log-skill-invocation.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill-invocation.sh",
             "timeout": 5000
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/redirect-builtin-agent.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/redirect-builtin-agent.sh",
             "timeout": 5000
           }
         ]
