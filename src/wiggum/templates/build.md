@@ -18,7 +18,7 @@ $task_description
 $quality_section
 5. Do NOT commit broken code. If quality checks fail, fix the issues before committing.
 6. Commit your changes using the /commit skill.
-7. Update PROGRESS.md with what you accomplished (see format below).
+7. Update `$impl_path/PROGRESS.md` with what you accomplished (see format below).
 8. Update nearby CLAUDE.md files if you discovered reusable patterns (see guidance below).
 
 ## Implementation Requirements
@@ -71,4 +71,4 @@ Worth adding:
 Not worth adding:
 - Task-specific implementation details
 - Temporary debugging notes
-- Information already in PROGRESS.md
+- Information already in `$impl_path/PROGRESS.md`
