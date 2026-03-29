@@ -121,7 +121,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo "  Ralph Iteration ${i} of ${MAX_ITERATIONS}" >&2
   echo "===============================================================" >&2
 
-  output="$(claude --dangerously-skip-permissions --print < "$AGENT_PROMPT" 2>&1 | tee /dev/stderr)" || true
+  output="$(claude --dangerously-skip-permissions --print --model sonnet < "$AGENT_PROMPT" 2>&1 | tee /dev/stderr)" || true
 
   if echo "$output" | grep -q "<promise>COMPLETE</promise>"; then
     echo "" >&2
