@@ -14,7 +14,7 @@ ISSUE_ID="${1:?Usage: ralph.sh <issue-id> [max_iterations]}"
 MAX_ITERATIONS="${2:-10}"
 
 PRD_FILE="$SCRIPT_DIR/prd.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
+PROGRESS_FILE="$SCRIPT_DIR/progress.md"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 AGENT_PROMPT="$SCRIPT_DIR/agent-prompt.md"
