@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import TYPE_CHECKING
 
 from wiggum.impl_dir import (
     create_skeleton_files,
     find_git_root,
+    resolve_plan_path,
+    resolve_progress_path,
     validate_impl_dir,
 )
 from wiggum.json_extract import extract_last_fenced_json
-from wiggum.prompts import render_plan_prompt
+from wiggum.plan import parse_plan
+from wiggum.progress import Outcome, append_iteration
+from wiggum.prompts import render_build_prompt, render_plan_prompt
 from wiggum.subprocess_util import invoke_claude
 
 if TYPE_CHECKING:
@@ -79,3 +84,82 @@ def run_plan(
         file=sys.stderr,
     )
     return 1
+
+
+def run_build(
+    issue_id: str,
+    *,
+    config: Config,
+    root: Path | None = None,
+) -> int:
+    """Run the build-mode loop up to max_build_iterations.
+
+    Returns 0 when all tasks complete, 1 if max iterations reached.
+    Exits with code 2 on startup failures (missing impl dir or plan file).
+    Prints a JSON summary to stdout at loop exit.
+    """
+    impl_path = validate_impl_dir(issue_id, root=root)
+    plan_path = resolve_plan_path(impl_path)
+    progress_path = resolve_progress_path(impl_path)
+
+    if not plan_path.exists():
+        print(  # noqa: T201
+            f"fatal: IMPLEMENTATION_PLAN.md does not exist: {plan_path}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    max_iters = config.loop.max_build_iterations
+    model = config.model if config.model.name else None
+    quality_commands = config.loop.quality_commands
+    completed = 0
+
+    for i in range(1, max_iters + 1):
+        state = parse_plan(plan_path)
+        task = state.top_unchecked()
+
+        if task is None:
+            break
+
+        print(  # noqa: T201
+            f"[build] iteration {i}/{max_iters}: {task.description}",
+            file=sys.stderr,
+        )
+        prompt = render_build_prompt(
+            issue_id=issue_id,
+            task_description=task.description,
+            quality_commands=quality_commands,
+        )
+        result = invoke_claude(prompt, model=model)
+
+        state.mark_complete(task.line_number)
+        state.write()
+        completed += 1
+
+        outcome = Outcome.PASS if result.exit_code == 0 else Outcome.FAIL
+        append_iteration(
+            path=progress_path,
+            task=task.description,
+            outcome=outcome,
+        )
+
+    state = parse_plan(plan_path)
+    all_done = state.all_complete()
+    exit_code = 0 if all_done else 1
+
+    summary = {
+        "issue_id": issue_id,
+        "completed_tasks": completed,
+        "total_tasks": len(state.tasks),
+        "all_complete": all_done,
+        "exit_code": exit_code,
+    }
+    print(json.dumps(summary))  # noqa: T201
+
+    if not all_done:
+        print(  # noqa: T201
+            f"[build] max iterations ({max_iters}) reached without completion",
+            file=sys.stderr,
+        )
+
+    return exit_code
