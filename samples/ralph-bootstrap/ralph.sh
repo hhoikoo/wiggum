@@ -31,10 +31,10 @@ if [ ! -f "$PRD_FILE" ]; then
     exit 1
   fi
 
-  # Find the PRD markdown (exclude research/ subdirectory)
+  # Find the PRD markdown (skip RESEARCH.md which is an artifact, not the PRD)
   prd_file=""
   for f in "$specs_dir"/*.md; do
-    if [ -f "$f" ]; then
+    if [ -f "$f" ] && [ "$(basename "$f")" != "RESEARCH.md" ]; then
       prd_file="$f"
       break
     fi
