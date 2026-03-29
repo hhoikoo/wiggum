@@ -64,7 +64,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
     PRD structure:
     - Summary (problem + solution + tradeoff, mechanics, why-this-over-alternatives)
     - Goals / Non-Goals
-    - Architecture (high-level diagram)
+    - Architecture (Mermaid diagram)
     - Design Decisions (numbered, with rationale)
     - Required Changes (table: Component | Change)
     - Acceptance Tests (checkbox Given/When/Then format)
