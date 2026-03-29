@@ -50,7 +50,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 
    The `<hash>` is the first 8 characters of a SHA-256 hash of the sanitized research query (for dedup). The `<semantic-name>` is a kebab-case descriptor.
 
-9. Launch a `codebase-researcher` subagent to read all per-source files in `.wiggum/specs/<ticket-id>/research/` and synthesize them into `.wiggum/specs/<ticket-id>/research/RESEARCH.md` -- the executive research summary. The main context receives only the summary text, not the raw research.
+9. Launch a `codebase-researcher` subagent to read all per-source files in `.wiggum/specs/<ticket-id>/research/` and synthesize them into `.wiggum/specs/<ticket-id>/RESEARCH.md` -- the executive research summary. RESEARCH.md lives directly under `specs/<ticket-id>/`, not inside `research/`. The `research/` subdirectory contains only individual per-source files. RESEARCH.md must include a table of contents at the top with relative links to each individual research document (e.g., `[topic](research/<hash>-<name>.md)`). The main context receives only the summary text, not the raw research.
 
 ## Phase 4: Draft PRD
 
@@ -93,8 +93,9 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 
 17. Push and create PR. Delegate to `/wiggum:create-pr`:
     - Title: `docs(<ticket-id>): <feature-name>`
-    - Body: frame as a proposal -- "PRD for <feature>", followed by the executive summary and a link to the PRD file in the repo. Do not use implementation language ("this PR implements...").
+    - Body: at the very top of the body (before any sections), place two prominent links in a blockquote: one to the PRD document and one to the RESEARCH.md summary. Use branch-relative GitHub blob URLs (`https://github.com/<owner>/<repo>/blob/<branch>/.wiggum/specs/<ticket-id>/<file>.md`) so links always show the latest version without needing updates after each commit. Format: `> **[View the PRD Document](<url>)** | **[View the Research Summary](<url>)**`. Below the links, frame as a proposal -- "PRD for <feature>", followed by the executive summary. Do not use implementation language ("this PR implements...").
     - Link PR to the tracking issue
+    - The PR body must use `resolves #<ticket-id>`. The PRD ticket is the deliverable for this skill -- the PRD PR closes it. Implementation is tracked by a separate ticket created afterward.
 
 18. For each unresolved open question remaining in the PRD, post it as a separate review comment on the PR so reviewers can address them.
 

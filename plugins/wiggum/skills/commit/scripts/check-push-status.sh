@@ -11,11 +11,12 @@ has_remote=false
 ahead=0
 pushed=false
 
-if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+remote_ref="origin/${branch}"
+if git rev-parse --verify "${remote_ref}" >/dev/null 2>&1; then
   has_remote=true
-  ahead=$(git rev-list --count '@{u}..HEAD')
+  ahead=$(git rev-list --count "${remote_ref}..HEAD")
   if [ "$ahead" -gt 0 ]; then
-    git push >&2
+    git push origin HEAD >&2
     pushed=true
   fi
 fi

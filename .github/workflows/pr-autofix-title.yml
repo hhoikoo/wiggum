@@ -22,7 +22,7 @@ jobs:
             const title = pr.title;
 
             // Skip if title already looks conventional
-            const conventionalRe = /^(feat|fix|docs?|refactor|ci|chore|release|test|deps|perf)(\(#\d+\))?:/;
+            const conventionalRe = /^(feat|fix|docs?|refactor|ci|chore|release|test|deps|perf)(\([^)]+\))?:/;
             if (conventionalRe.test(title)) {
               console.log('Title already follows convention');
               return;
