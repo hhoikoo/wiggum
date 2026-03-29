@@ -1,5 +1,19 @@
 # RESEARCH.md -- Executive Research Summary for Ticket #10
 
+## Research Documents
+
+| Topic | Document |
+|-------|----------|
+| CLI skeleton and cyclopts patterns | [a1b2c3d4-cli-skeleton-cyclopts.md](research/a1b2c3d4-cli-skeleton-cyclopts.md) |
+| ralph.sh bootstrap script analysis | [b3c4d5e6-ralph-bootstrap-script.md](research/b3c4d5e6-ralph-bootstrap-script.md) |
+| .wiggum/ config and directory structure | [c4d5e6f7-wiggum-config-structure.md](research/c4d5e6f7-wiggum-config-structure.md) |
+| Plugin, skills, and agents structure | [d5e6f7a8-plugin-skills-agents.md](research/d5e6f7a8-plugin-skills-agents.md) |
+| Ralph loop guide analysis | [e6f7a8b9-ralph-loop-guide.md](research/e6f7a8b9-ralph-loop-guide.md) |
+| cyclopts nested subcommands | [f7a8b9c0-cyclopts-subcommands.md](research/f7a8b9c0-cyclopts-subcommands.md) |
+| Wiggum design document (outdated) | [a8b9c0d1-wiggum-design-doc.md](research/a8b9c0d1-wiggum-design-doc.md) |
+| TOML config with pydantic validation | [b9c0d1e2-toml-config-pydantic.md](research/b9c0d1e2-toml-config-pydantic.md) |
+| SIGINT and subprocess handling | [c0d1e2f3-sigint-subprocess-handling.md](research/c0d1e2f3-sigint-subprocess-handling.md) |
+
 ## Executive Summary
 
 Ticket #10 implements the first working version of `wiggum run`, a Python CLI that replaces the bash `ralph.sh` bootstrap script. The implementation is deliberately minimal: direct subprocess calls to `claude`, no hexagonal architecture, no tmux, no PRD generation, and no PR lifecycle. The existing codebase provides a clean slate -- a bare cyclopts `App` with no commands, an empty package structure, and no config file -- so the entire feature is greenfield. All major design questions (CLI structure, config loading, subprocess management, interrupt handling) have been answered by the nine research files and converge on a consistent, straightforward pattern.
