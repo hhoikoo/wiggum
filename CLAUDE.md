@@ -39,8 +39,8 @@ tests/                       # test files mirror src/ structure
 plugins/wiggum/              # wiggum Claude Code plugin (marketplace)
   skills/                    # plugin skills (invoke as /wiggum:<name>)
   agents/                    # plugin agents (researcher/, prd-writer)
-  scripts/                   # shared shell scripts (symlinked into skills)
-  hooks/                     # plugin hook configuration
+  scripts/                   # shared shell scripts (used by multiple skills)
+  hooks/                     # hook configuration and hook scripts
 bin/                         # convenience symlinks (claude-dev)
 .claude-plugin/              # marketplace manifest
 .wiggum/                     # runtime artifacts (specs, research)
