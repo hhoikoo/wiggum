@@ -87,48 +87,81 @@ Any gaps, ambiguities, or version-specific notes. If the docs are silent on a po
 
 Base URL: `https://code.claude.com/docs/en/`
 
+Fetch the full index at `https://code.claude.com/docs/llms.txt` to discover pages not listed here.
+
 | Slug | Topics |
 |------|--------|
-| overview | product overview, all surfaces (terminal/VS Code/JetBrains/Desktop/Web/Slack/Chrome/CI-CD), feature highlights, model list |
-| quickstart | install CLI, login, first session, basic commands (/clear /help), Git operations |
-| setup | system requirements, native/Homebrew/WinGet install, authentication, binary signing, auto-updates, release channels, uninstall |
-| how-claude-code-works | agentic loop, built-in tools, sessions, context window management, checkpoints, permission modes |
-| best-practices | verification criteria, explore-plan-code workflow, prompting, rich context, CLAUDE.md setup, permissions, CLI tools, MCP, hooks, skills, subagents, plugins, headless mode, parallel sessions |
-| common-workflows | codebase exploration, bug fixing, refactoring, subagents, Plan Mode, writing tests, creating PRs, @-mentions, extended thinking, session resume, git worktrees |
-| interactive-mode | keyboard shortcuts, built-in commands (/help /clear /compact /resume /model /mcp /hooks /memory /permissions /agents /init /config etc.), input modes, task list display |
-| checkpointing | track/rewind/summarize edits, checkpoint mechanics, rewind menu, code-only vs conversation-only restore, fork session |
-| features-overview | when to use CLAUDE.md vs Skills vs Subagents vs Agent Teams vs MCP vs Hooks vs Plugins; context costs; feature precedence |
-| memory | auto memory (MEMORY.md), CLAUDE.md file types (managed/project/project-rules/user/local/auto), @path imports, recursive lookup, /memory command, /init command, modular rules (.claude/rules/*.md), path-specific rules with frontmatter, glob patterns |
-| skills | SKILL.md format, frontmatter fields (name/description/disable-model-invocation/user-invocable/allowed-tools/model/context/agent/hooks), skill scopes, $ARGUMENTS substitution, dynamic context (!command), context: fork, sharing skills |
-| hooks | hook lifecycle, all 15 events, hook scopes, matcher patterns (regex/MCP), handler types (command/prompt/agent), exit codes, JSON output fields, per-event decision schemas, env var persistence (CLAUDE_ENV_FILE) |
-| hooks-guide | /hooks menu walkthrough, desktop notifications, auto-format after edits, blocking edits to protected files, re-inject context after compaction, matcher syntax |
-| mcp | MCP servers, HTTP/SSE/stdio install, scopes (local/project/user), .mcp.json env vars, OAuth 2.0, Claude Code as MCP server, MCP resources, MCP Tool Search, MCP prompts, managed MCP |
-| permissions | tiered permission system, /permissions UI, allow/ask/deny rules, permission modes, rule syntax (Tool/Tool(specifier)/wildcards), Bash rules (glob/word boundary), Read/Edit (gitignore patterns), sandboxing |
-| sub-agents | built-in agents, creating via /agents UI or SKILL.md, frontmatter fields (name/description/tools/disallowedTools/model/permissionMode/maxTurns/skills/mcpServers/hooks/memory/background/isolation), Task(agent_type) syntax, foreground vs background, resuming |
-| agent-teams | experimental, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS, display modes, specifying teammates/models, task list (shared/dependencies), architecture (lead/teammates/mailbox) |
-| plugins | plugin structure (commands/agents/skills/hooks/.mcp.json/.lsp.json/settings.json), LSP servers, manifest, --plugin-dir flag, testing, debugging |
-| plugins-reference | component schemas, plugin manifest schema, caching, CLI commands (plugin install/uninstall/enable/disable/update), version management |
-| plugin-marketplaces | marketplace.json schema, source types, strict mode, hosting, private repo auth, team config |
-| discover-plugins | official marketplace, code intelligence plugins (LSP), external integrations, auto-updates |
-| settings | config scopes (managed/user/project/local), settings files locations, all settings keys, permission settings, sandbox settings, plugin settings, 70+ env vars |
-| cli-reference | all CLI commands, all CLI flags (50+), --agents flag JSON format, system prompt flags |
-| model-config | model aliases (sonnet/opus/haiku), effort level, model switching, ANTHROPIC_MODEL env var |
+| overview | product overview, all surfaces (terminal/VS Code/JetBrains/Desktop/Web/Slack/Chrome/CI-CD), feature highlights |
+| quickstart | install CLI, login, first session, basic commands |
+| setup | system requirements, platform-specific install, authentication, auto-updates, uninstall |
+| how-claude-code-works | agentic loop, built-in tools, sessions, context window management, checkpoints |
+| best-practices | verification, explore-plan-code workflow, prompting, CLAUDE.md setup, permissions, hooks, skills, subagents, plugins |
+| common-workflows | codebase exploration, bug fixing, refactoring, subagents, Plan Mode, tests, PRs, @-mentions, git worktrees |
+| interactive-mode | keyboard shortcuts, built-in commands, input modes, task list display |
+| commands | complete built-in command reference |
+| checkpointing | track/rewind/summarize edits, checkpoint mechanics, rewind menu, fork session |
+| features-overview | when to use CLAUDE.md vs Skills vs Subagents vs Agent Teams vs MCP vs Hooks vs Plugins; context costs |
+| memory | auto memory (MEMORY.md), CLAUDE.md file types, @path imports, modular rules (.claude/rules/*.md), path-specific frontmatter |
+| claude-directory | .claude directory structure, settings.json, hooks, skills, commands, subagents, rules, auto memory |
+| context-window | interactive context simulation, file read costs, context filling |
+| skills | SKILL.md format, frontmatter fields, $ARGUMENTS substitution, dynamic context (!command), context: fork, sharing |
+| hooks | hook lifecycle, 23+ events, matcher patterns, handler types (command/prompt/agent), exit codes, JSON output, env persistence |
+| hooks-guide | /hooks menu, desktop notifications, auto-format, blocking edits, re-inject context, matcher syntax |
+| mcp | MCP servers, HTTP/SSE/stdio install, scopes, .mcp.json env vars, OAuth 2.0, MCP resources, Tool Search, prompts |
+| permissions | tiered permission system, allow/ask/deny rules, permission modes, rule syntax, Bash rules, sandboxing |
+| permission-modes | supervised editing, read-only planning, auto mode |
+| sub-agents | built-in agents, creating agents, frontmatter fields, Task(agent_type) syntax, foreground vs background, isolation: worktree |
+| agent-teams | experimental, multi-instance coordination, shared tasks, inter-agent messaging |
+| plugins | plugin structure, LSP servers, manifest, --plugin-dir flag, testing, debugging |
+| plugins-reference | component schemas, plugin manifest schema, caching, CLI commands, version management |
+| plugin-marketplaces | marketplace.json schema, source types, strict mode, hosting, private repo auth |
+| discover-plugins | official marketplace, code intelligence plugins (LSP), auto-updates |
+| settings | config scopes (managed/user/project/local), all settings keys, plugin settings |
+| env-vars | complete environment variable reference |
+| cli-reference | all CLI commands, all CLI flags, --agents flag JSON format |
+| tools-reference | complete tool reference, permission requirements |
+| model-config | model aliases (sonnet/opus/haiku), effort level, model switching |
+| fast-mode | Opus 4.6 faster responses, fast mode toggling |
 | keybindings | custom keyboard shortcuts |
 | statusline | status bar customization, /statusline command |
-| vs-code | VS Code/Cursor extension, panel, @-mentions, tabs, terminal mode, Chrome browser integration, commands and shortcuts |
-| jetbrains | IntelliJ/PyCharm/Android Studio/WebStorm/GoLand, Cmd+Esc launch, diff viewing, /ide command, remote dev |
-| desktop | Desktop app, permission modes, diff view, parallel sessions, remote tasks, connectors (MCP with GUI), enterprise config |
-| claude-code-on-the-web | async cloud execution, GitHub integration, --remote flag, /teleport, session sharing, cloud env config, network access levels |
-| headless | programmatic usage via Agent SDK, CLI (-p flag), Python, TypeScript; structured output; non-interactive mode |
+| voice-dictation | push-to-talk voice input |
+| vs-code | VS Code/Cursor extension, inline diffs, @-mentions, Chrome browser integration |
+| jetbrains | IntelliJ/PyCharm/WebStorm/GoLand, Cmd+Esc launch, diff viewing, remote dev |
+| desktop | Desktop app, computer use, dispatch sessions, parallel sessions, Git isolation, visual diffs, PR monitoring |
+| desktop-quickstart | Desktop app installation and first session |
+| chrome | Chrome browser integration, web app testing, console debugging |
+| slack | Slack workspace integration, task delegation |
+| remote-control | phone/tablet/browser session continuation |
+| claude-code-on-the-web | async cloud execution, GitHub integration, --remote flag, /teleport, session sharing |
+| web-scheduled-tasks | cloud scheduled task automation |
+| scheduled-tasks | /loop command, cron scheduling, polling, reminders |
+| channels | push events into running sessions (webhooks, alerts, CI results) |
+| channels-reference | MCP server development for channels, capability declaration, notification events |
+| headless | programmatic usage via Agent SDK, CLI (-p flag), Python, TypeScript; structured output |
 | output-styles | custom output styles for non-engineering uses |
+| code-review | automated PR reviews, logic errors, security vulnerabilities |
 | github-actions | GitHub workflow integration, automated PR review, issue triage |
 | gitlab-ci-cd | GitLab CI/CD pipeline integration |
-| sandboxing | filesystem/network isolation, macOS/Linux/WSL2, sandbox config (allowedDomains/excludedCommands), autoAllowBashIfSandboxed |
+| sandboxing | filesystem/network isolation, macOS/Linux/WSL2, sandbox config |
 | security | security safeguards, prompt injection prevention |
-| data-usage | Anthropic data usage policies, privacy, training opt-out |
+| costs | token tracking, spend limits, context management, model selection |
+| data-usage | Anthropic data usage policies, privacy |
+| zero-data-retention | ZDR scope, disabled features |
 | authentication | user auth, credential management, OAuth, login methods |
-| server-managed-settings | centrally configure Claude Code for orgs from Anthropic servers |
+| server-managed-settings | centrally configure Claude Code for orgs |
+| legal-and-compliance | legal agreements, compliance certifications |
+| network-config | proxy servers, custom CA, mTLS authentication |
+| devcontainer | development containers, consistent team environments |
+| monitoring-usage | OpenTelemetry configuration |
+| llm-gateway | gateway requirements, authentication, model selection, provider endpoints |
 | third-party-integrations | Amazon Bedrock, Google Vertex AI, Microsoft Foundry overview |
+| amazon-bedrock | Bedrock setup, IAM configuration |
+| google-vertex-ai | Vertex AI setup, IAM configuration |
+| microsoft-foundry | Foundry setup, configuration |
+| analytics | usage metrics, adoption tracking, engineering velocity |
+| terminal-config | terminal optimization guidelines |
+| troubleshooting | installation and usage issue solutions |
+| changelog | release notes, features, improvements, bug fixes by version |
 
 ## Rules
 
