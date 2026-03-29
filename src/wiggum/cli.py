@@ -1,38 +1,43 @@
 """Wiggum CLI -- root app and ``run`` sub-app with plan/build commands."""
 
+import sys
 from typing import Annotated
 
 import cyclopts
 
-from wiggum.config import load_config
+from wiggum.config import Config, load_config
+from wiggum.runner import run_build, run_combined, run_plan
 
 app = cyclopts.App(name="wiggum")
 run_app = cyclopts.App(name="run", help="Run the plan/build loop for an issue.")
 app.command(run_app)
 
 
-def _resolve_config(
+def _apply_overrides(
+    cfg: Config,
     *,
     max_iterations: int | None,
     model: str | None,
     mode: str,
-) -> dict[str, object]:
-    """Load config and apply CLI overrides, returning a dict of resolved values."""
-    cfg = load_config()
+) -> Config:
+    """Return a new Config with CLI overrides applied."""
+    loop_overrides: dict[str, object] = {}
+    if max_iterations is not None:
+        if mode == "plan":
+            loop_overrides["max_plan_iterations"] = max_iterations
+        else:
+            loop_overrides["max_build_iterations"] = max_iterations
 
-    if mode == "plan":
-        iterations = max_iterations or cfg.loop.max_plan_iterations
-    else:
-        iterations = max_iterations or cfg.loop.max_build_iterations
+    model_overrides: dict[str, object] = {}
+    if model is not None:
+        model_overrides["name"] = model
 
-    resolved_model = model or cfg.model.name
-
-    return {
-        "issue_id": "",
-        "max_iterations": iterations,
-        "model": resolved_model,
-        "mode": mode,
-    }
+    return cfg.model_copy(
+        update={
+            "loop": cfg.loop.model_copy(update=loop_overrides),
+            "model": cfg.model.model_copy(update=model_overrides),
+        },
+    )
 
 
 @run_app.command
@@ -51,9 +56,10 @@ def plan(
     ] = None,
 ) -> None:
     """Run the planning loop for an issue."""
-    resolved = _resolve_config(max_iterations=max_iterations, model=model, mode="plan")
-    resolved["issue_id"] = issue_id
-    print(resolved)  # noqa: T201
+    cfg = _apply_overrides(
+        load_config(), max_iterations=max_iterations, model=model, mode="plan"
+    )
+    sys.exit(run_plan(issue_id, config=cfg))
 
 
 @run_app.command
@@ -72,9 +78,10 @@ def build(
     ] = None,
 ) -> None:
     """Run the build loop for an issue."""
-    resolved = _resolve_config(max_iterations=max_iterations, model=model, mode="build")
-    resolved["issue_id"] = issue_id
-    print(resolved)  # noqa: T201
+    cfg = _apply_overrides(
+        load_config(), max_iterations=max_iterations, model=model, mode="build"
+    )
+    sys.exit(run_build(issue_id, config=cfg))
 
 
 @run_app.default
@@ -91,8 +98,7 @@ def run(
     ] = None,
 ) -> None:
     """Run both plan and build loops for an issue."""
-    resolved = _resolve_config(
-        max_iterations=max_iterations, model=model, mode="combined"
+    cfg = _apply_overrides(
+        load_config(), max_iterations=max_iterations, model=model, mode="combined"
     )
-    resolved["issue_id"] = issue_id
-    print(resolved)  # noqa: T201
+    sys.exit(run_combined(issue_id, config=cfg))

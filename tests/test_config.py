@@ -123,8 +123,9 @@ class TestLoadConfig:
         assert cfg.model.name == "opus"
         assert cfg.model.flags == ["--max-turns", "50"]
 
-    def test_falls_back_to_defaults(self, tmp_path):
+    def test_falls_back_to_defaults(self, tmp_path, monkeypatch):
         (tmp_path / ".git").mkdir()
+        monkeypatch.chdir(tmp_path)
         cfg = load_config(path=None)
         assert cfg == Config()
 

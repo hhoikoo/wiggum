@@ -1,0 +1,12 @@
+[loop]
+max_plan_iterations = 5
+max_build_iterations = 50
+quality_commands = [
+  "uv run pyright",
+  "uv run ruff check src/ tests/",
+  "uv run pytest",
+]
+
+[model]
+name = "sonnet"
+flags = ["--max-turns", "50"]

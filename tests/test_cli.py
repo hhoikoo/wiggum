@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from wiggum.cli import app, build, plan, run
 
 
@@ -53,44 +51,40 @@ class TestArgumentParsing:
 
 
 class TestConfigOverrides:
-    @patch("wiggum.cli.load_config")
-    def test_plan_uses_config_defaults(self, mock_load):
+    def test_plan_uses_config_defaults(self):
+        from wiggum.cli import _apply_overrides
         from wiggum.config import Config
 
-        mock_load.return_value = Config()
-        from wiggum.cli import _resolve_config
+        result = _apply_overrides(
+            Config(), max_iterations=None, model=None, mode="plan"
+        )
+        assert result.loop.max_plan_iterations == 5
+        assert result.model.name == ""
 
-        result = _resolve_config(max_iterations=None, model=None, mode="plan")
-        assert result["max_iterations"] == 5
-        assert result["model"] == ""
-
-    @patch("wiggum.cli.load_config")
-    def test_build_uses_config_defaults(self, mock_load):
+    def test_build_uses_config_defaults(self):
+        from wiggum.cli import _apply_overrides
         from wiggum.config import Config
 
-        mock_load.return_value = Config()
-        from wiggum.cli import _resolve_config
+        result = _apply_overrides(
+            Config(), max_iterations=None, model=None, mode="build"
+        )
+        assert result.loop.max_build_iterations == 20
 
-        result = _resolve_config(max_iterations=None, model=None, mode="build")
-        assert result["max_iterations"] == 20
-
-    @patch("wiggum.cli.load_config")
-    def test_cli_flag_overrides_config(self, mock_load):
+    def test_cli_flag_overrides_config(self):
+        from wiggum.cli import _apply_overrides
         from wiggum.config import Config
 
-        mock_load.return_value = Config()
-        from wiggum.cli import _resolve_config
+        result = _apply_overrides(
+            Config(), max_iterations=10, model="opus", mode="plan"
+        )
+        assert result.loop.max_plan_iterations == 10
+        assert result.model.name == "opus"
 
-        result = _resolve_config(max_iterations=10, model="opus", mode="plan")
-        assert result["max_iterations"] == 10
-        assert result["model"] == "opus"
-
-    @patch("wiggum.cli.load_config")
-    def test_combined_mode_uses_build_iterations(self, mock_load):
+    def test_combined_mode_uses_build_iterations(self):
+        from wiggum.cli import _apply_overrides
         from wiggum.config import Config
 
-        mock_load.return_value = Config()
-        from wiggum.cli import _resolve_config
-
-        result = _resolve_config(max_iterations=None, model=None, mode="combined")
-        assert result["max_iterations"] == 20
+        result = _apply_overrides(
+            Config(), max_iterations=None, model=None, mode="combined"
+        )
+        assert result.loop.max_build_iterations == 20
