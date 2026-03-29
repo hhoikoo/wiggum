@@ -22,7 +22,7 @@ Keep the back-and-forth brief -- 2-3 rounds max. Produce a polished feature summ
 
 Delegate to the `/wiggum:create-issue` skill to create a GitHub issue:
 
-- **Type**: Story (or Epic if the user indicates this is a large feature)
+- **Type**: Task (this is a proposal document, not an implementation ticket)
 - **Title**: concise feature name in imperative form
 - **Body**: the polished feature summary from Phase 1
 
