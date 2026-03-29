@@ -1,5 +1,5 @@
 ---
-name: cc-guide
+name: claude-code-guide
 description: Look up Claude Code official documentation and known GitHub issues to answer a specific question about configuration, frontmatter fields, tool names, hook events, permissions, or other Claude Code features. Use when unsure about any Claude Code behavior and need an authoritative answer.
 model: sonnet
 tools:

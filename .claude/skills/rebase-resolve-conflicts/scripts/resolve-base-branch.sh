@@ -1,1 +1,0 @@
-../../../../plugins/wiggum/scripts/resolve-base-branch.sh

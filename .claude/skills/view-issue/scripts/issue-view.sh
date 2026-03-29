@@ -1,1 +1,0 @@
-../../../../plugins/wiggum/scripts/issue-view.sh

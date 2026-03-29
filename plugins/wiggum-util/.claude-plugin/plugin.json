@@ -1,0 +1,7 @@
+{
+  "name": "wiggum-util",
+  "description": "Development utilities: quick-push, CI fixes, PR review, rebase, and Claude Code documentation guide.",
+  "author": { "name": "wiggum" },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/hhoikoo/wiggum"
+}

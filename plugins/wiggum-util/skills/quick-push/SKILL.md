@@ -11,8 +11,7 @@ allowed-tools:
   - Skill
   - AskUserQuestion
   - Bash(git *)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(gh *)
   - "Bash(uv run pre-commit run --all-files)"
 ---
@@ -29,7 +28,7 @@ Ship manual changes without implementation logic. Creates a branch, commits, pus
 
 ### 1. Create Branch
 
-Invoke the `/create-branch` skill with `$ARGUMENTS` (description mode). This creates and checks out a branch named `<type>/<short-name>`.
+Invoke the `/wiggum:create-branch` skill with `$ARGUMENTS` (description mode). This creates and checks out a branch named `<type>/<short-name>`.
 
 If changes are already in the working tree (unstaged or staged), create the branch first -- git carries uncommitted changes to the new branch automatically.
 
@@ -64,8 +63,8 @@ Print a summary:
 
 When the user sends any message (e.g., "check"), evaluate the PR state:
 
-1. Check CI status via `/fix-pr-ci` skill's step 1 (list checks). If any check is failing, invoke `/fix-pr-ci`.
-2. Check for unresolved review comments. If review feedback exists, invoke `/review-pr`.
+1. Check CI status via `/wiggum-util:fix-pr-ci` skill's step 1 (list checks). If any check is failing, invoke `/wiggum-util:fix-pr-ci`.
+2. Check for unresolved review comments. If review feedback exists, invoke `/wiggum-util:review-pr`.
 3. Check for merge conflicts. If the PR is not mergeable (base branch advanced), rebase onto the base branch, resolve conflicts, and force-push with `--force-with-lease`.
 4. If CI is green, no pending reviews, and no conflicts, report the current status and wait.
 
