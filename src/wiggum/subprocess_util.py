@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from wiggum.interrupt import set_active_process
+
 if TYPE_CHECKING:
     from wiggum.config import ModelConfig
 
@@ -44,5 +46,9 @@ def invoke_claude(
         stderr=None,
         text=True,
     )
-    stdout, _ = proc.communicate(input=prompt)
+    set_active_process(proc)
+    try:
+        stdout, _ = proc.communicate(input=prompt)
+    finally:
+        set_active_process(None)
     return InvokeResult(stdout=stdout, exit_code=proc.returncode)

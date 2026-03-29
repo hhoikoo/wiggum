@@ -1,7 +1,17 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+import wiggum.interrupt as interrupt_mod
 from wiggum.config import ModelConfig
+from wiggum.interrupt import set_active_process
 from wiggum.subprocess_util import InvokeResult, invoke_claude
+
+
+@pytest.fixture(autouse=True)
+def _clear_active_process():
+    yield
+    set_active_process(None)
 
 
 class TestInvokeResult:
@@ -107,3 +117,43 @@ class TestInvokeClaude:
         result = invoke_claude("prompt")
 
         assert result.stdout == "line1\nline2\nline3"
+
+    @patch("wiggum.subprocess_util.subprocess.Popen")
+    def test_sets_active_process_before_communicate(self, mock_popen_cls: MagicMock):
+        proc = MagicMock()
+        active_at_communicate: list[object] = []
+
+        def capture_state(*args: object, **kwargs: object) -> tuple[str, None]:
+            active_at_communicate.append(interrupt_mod._active_proc)
+            return ("output", None)
+
+        proc.communicate.side_effect = capture_state
+        proc.returncode = 0
+        mock_popen_cls.return_value = proc
+
+        invoke_claude("prompt")
+
+        assert len(active_at_communicate) == 1
+        assert active_at_communicate[0] is proc
+
+    @patch("wiggum.subprocess_util.subprocess.Popen")
+    def test_clears_active_process_after_success(self, mock_popen_cls: MagicMock):
+        proc = MagicMock()
+        proc.communicate.return_value = ("output", None)
+        proc.returncode = 0
+        mock_popen_cls.return_value = proc
+
+        invoke_claude("prompt")
+
+        assert interrupt_mod._active_proc is None
+
+    @patch("wiggum.subprocess_util.subprocess.Popen")
+    def test_clears_active_process_after_exception(self, mock_popen_cls: MagicMock):
+        proc = MagicMock()
+        proc.communicate.side_effect = RuntimeError("subprocess error")
+        mock_popen_cls.return_value = proc
+
+        with pytest.raises(RuntimeError):
+            invoke_claude("prompt")
+
+        assert interrupt_mod._active_proc is None
