@@ -95,6 +95,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
     - Title: `docs(<ticket-id>): <feature-name>`
     - Body: frame as a proposal -- "PRD for <feature>", followed by the executive summary and a link to the PRD file in the repo. Do not use implementation language ("this PR implements...").
     - Link PR to the tracking issue
+    - The PR body must use `resolves #<ticket-id>`. The PRD ticket is the deliverable for this skill -- the PRD PR closes it. Implementation is tracked by a separate ticket created afterward.
 
 18. For each unresolved open question remaining in the PRD, post it as a separate review comment on the PR so reviewers can address them.
 
