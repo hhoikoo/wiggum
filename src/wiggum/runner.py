@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from wiggum.impl_dir import (
     create_skeleton_files,
     find_git_root,
+    impl_dir_path,
     resolve_plan_path,
     resolve_progress_path,
     validate_impl_dir,
@@ -58,14 +59,16 @@ def run_plan(
     """Run the plan-mode loop up to max_plan_iterations.
 
     Returns 0 on completion, 1 if max iterations reached without completion.
-    Exits with code 2 on startup failures (missing specs or impl directory).
+    Exits with code 2 on startup failures (missing specs directory).
     """
     specs_content = resolve_specs(issue_id, root=root)
-    impl_path = validate_impl_dir(issue_id, root=root)
+    impl_path = impl_dir_path(issue_id, root=root)
+    impl_path.mkdir(parents=True, exist_ok=True)
     create_skeleton_files(impl_path)
 
     max_iters = config.loop.max_plan_iterations
-    model = config.model if config.model.name else None
+    plan_model = config.model.plan
+    model = plan_model if plan_model.name else None
 
     for i in range(1, max_iters + 1):
         print(f"[plan] iteration {i}/{max_iters}", file=sys.stderr)  # noqa: T201
@@ -110,7 +113,8 @@ def run_build(
         sys.exit(2)
 
     max_iters = config.loop.max_build_iterations
-    model = config.model if config.model.name else None
+    build_model = config.model.build
+    model = build_model if build_model.name else None
     quality_commands = config.loop.quality_commands
     completed = 0
 

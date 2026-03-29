@@ -59,7 +59,7 @@ class TestConfigOverrides:
             Config(), max_iterations=None, model=None, mode="plan"
         )
         assert result.loop.max_plan_iterations == 5
-        assert result.model.name == ""
+        assert result.model.plan.name == ""
 
     def test_build_uses_config_defaults(self):
         from wiggum.cli import _apply_overrides
@@ -70,7 +70,7 @@ class TestConfigOverrides:
         )
         assert result.loop.max_build_iterations == 20
 
-    def test_cli_flag_overrides_config(self):
+    def test_cli_flag_overrides_plan_model(self):
         from wiggum.cli import _apply_overrides
         from wiggum.config import Config
 
@@ -78,7 +78,28 @@ class TestConfigOverrides:
             Config(), max_iterations=10, model="opus", mode="plan"
         )
         assert result.loop.max_plan_iterations == 10
-        assert result.model.name == "opus"
+        assert result.model.plan.name == "opus"
+        assert result.model.build.name == ""
+
+    def test_cli_flag_overrides_build_model(self):
+        from wiggum.cli import _apply_overrides
+        from wiggum.config import Config
+
+        result = _apply_overrides(
+            Config(), max_iterations=None, model="sonnet", mode="build"
+        )
+        assert result.model.build.name == "sonnet"
+        assert result.model.plan.name == ""
+
+    def test_combined_mode_overrides_both_models(self):
+        from wiggum.cli import _apply_overrides
+        from wiggum.config import Config
+
+        result = _apply_overrides(
+            Config(), max_iterations=None, model="haiku", mode="combined"
+        )
+        assert result.model.plan.name == "haiku"
+        assert result.model.build.name == "haiku"
 
     def test_combined_mode_uses_build_iterations(self):
         from wiggum.cli import _apply_overrides

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 import pytest
 
-from wiggum.config import Config, LoopConfig, ModelConfig
+from wiggum.config import Config, LoopConfig, ModelConfig, ModelPhaseConfig
 from wiggum.runner import resolve_specs, run_build, run_combined, run_plan
 from wiggum.subprocess_util import InvokeResult
 
@@ -113,16 +113,26 @@ class TestRunPlan:
         assert (impl / "IMPLEMENTATION_PLAN.md").exists()
         assert (impl / "PROGRESS.md").exists()
 
-    def test_exits_when_impl_dir_missing(self, tmp_path: Path):
+    @patch("wiggum.runner.invoke_claude")
+    def test_creates_impl_dir_when_missing(
+        self, mock_invoke: MagicMock, tmp_path: Path
+    ):
         (tmp_path / ".git").mkdir()
         specs = tmp_path / ".wiggum" / "specs" / "42"
         specs.mkdir(parents=True)
         (specs / "prd.md").write_text("spec")
-        cfg = Config()
+        mock_invoke.return_value = InvokeResult(
+            stdout='```json\n{"status": "complete"}\n```',
+            exit_code=0,
+        )
+        cfg = Config(loop=LoopConfig(max_plan_iterations=1))
 
-        with pytest.raises(SystemExit) as exc_info:
-            run_plan("42", config=cfg, root=tmp_path)
-        assert exc_info.value.code == 2
+        code = run_plan("42", config=cfg, root=tmp_path)
+
+        assert code == 0
+        impl = tmp_path / ".wiggum" / "implementation" / "42"
+        assert impl.is_dir()
+        assert (impl / "IMPLEMENTATION_PLAN.md").exists()
 
     def test_exits_when_specs_dir_missing(self, tmp_path: Path):
         (tmp_path / ".git").mkdir()
@@ -135,13 +145,13 @@ class TestRunPlan:
         assert exc_info.value.code == 2
 
     @patch("wiggum.runner.invoke_claude")
-    def test_passes_model_config(self, mock_invoke: MagicMock, tmp_path: Path):
+    def test_passes_plan_model_config(self, mock_invoke: MagicMock, tmp_path: Path):
         root = _setup_repo(tmp_path)
         mock_invoke.return_value = InvokeResult(
             stdout='```json\n{"status": "complete"}\n```',
             exit_code=0,
         )
-        cfg = Config(model=ModelConfig(name="opus"))
+        cfg = Config(model=ModelPhaseConfig(plan=ModelConfig(name="opus")))
 
         run_plan("42", config=cfg, root=root)
 
@@ -149,13 +159,15 @@ class TestRunPlan:
         assert kwargs["model"].name == "opus"
 
     @patch("wiggum.runner.invoke_claude")
-    def test_no_model_when_name_empty(self, mock_invoke: MagicMock, tmp_path: Path):
+    def test_no_model_when_plan_name_empty(
+        self, mock_invoke: MagicMock, tmp_path: Path
+    ):
         root = _setup_repo(tmp_path)
         mock_invoke.return_value = InvokeResult(
             stdout='```json\n{"status": "complete"}\n```',
             exit_code=0,
         )
-        cfg = Config(model=ModelConfig(name=""))
+        cfg = Config(model=ModelPhaseConfig(plan=ModelConfig(name="")))
 
         run_plan("42", config=cfg, root=root)
 
@@ -342,10 +354,10 @@ class TestRunBuild:
         assert "uv run pyright" in prompt
 
     @patch("wiggum.runner.invoke_claude")
-    def test_passes_model_config(self, mock_invoke: MagicMock, tmp_path: Path):
+    def test_passes_build_model_config(self, mock_invoke: MagicMock, tmp_path: Path):
         root = _setup_build_repo(tmp_path)
         mock_invoke.return_value = InvokeResult(stdout="done", exit_code=0)
-        cfg = Config(model=ModelConfig(name="opus"))
+        cfg = Config(model=ModelPhaseConfig(build=ModelConfig(name="opus")))
 
         run_build("42", config=cfg, root=root)
 
@@ -353,10 +365,12 @@ class TestRunBuild:
         assert kwargs["model"].name == "opus"
 
     @patch("wiggum.runner.invoke_claude")
-    def test_no_model_when_name_empty(self, mock_invoke: MagicMock, tmp_path: Path):
+    def test_no_model_when_build_name_empty(
+        self, mock_invoke: MagicMock, tmp_path: Path
+    ):
         root = _setup_build_repo(tmp_path)
         mock_invoke.return_value = InvokeResult(stdout="done", exit_code=0)
-        cfg = Config(model=ModelConfig(name=""))
+        cfg = Config(model=ModelPhaseConfig(build=ModelConfig(name="")))
 
         run_build("42", config=cfg, root=root)
 

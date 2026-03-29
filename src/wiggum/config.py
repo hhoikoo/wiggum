@@ -23,11 +23,18 @@ class ModelConfig(BaseModel):
     flags: list[str] = Field(default_factory=list)
 
 
+class ModelPhaseConfig(BaseModel):
+    """Per-phase model configuration for plan and build."""
+
+    plan: ModelConfig = Field(default_factory=ModelConfig)
+    build: ModelConfig = Field(default_factory=ModelConfig)
+
+
 class Config(BaseModel):
     """Top-level configuration aggregating all sections."""
 
     loop: LoopConfig = Field(default_factory=LoopConfig)
-    model: ModelConfig = Field(default_factory=ModelConfig)
+    model: ModelPhaseConfig = Field(default_factory=ModelPhaseConfig)
 
 
 _CONFIG_PATH = Path(".wiggum") / "config.toml"

@@ -28,14 +28,29 @@ def _apply_overrides(
         else:
             loop_overrides["max_build_iterations"] = max_iterations
 
-    model_overrides: dict[str, object] = {}
+    model_phase = cfg.model
     if model is not None:
-        model_overrides["name"] = model
+        name_override = {"name": model}
+        if mode == "plan":
+            model_phase = model_phase.model_copy(
+                update={"plan": model_phase.plan.model_copy(update=name_override)}
+            )
+        elif mode == "build":
+            model_phase = model_phase.model_copy(
+                update={"build": model_phase.build.model_copy(update=name_override)}
+            )
+        else:
+            model_phase = model_phase.model_copy(
+                update={
+                    "plan": model_phase.plan.model_copy(update=name_override),
+                    "build": model_phase.build.model_copy(update=name_override),
+                }
+            )
 
     return cfg.model_copy(
         update={
             "loop": cfg.loop.model_copy(update=loop_overrides),
-            "model": cfg.model.model_copy(update=model_overrides),
+            "model": model_phase,
         },
     )
 
