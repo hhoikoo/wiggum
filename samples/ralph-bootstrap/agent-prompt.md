@@ -4,8 +4,8 @@ You are an autonomous coding agent working on a software project.
 
 ## Your Task
 
-1. Read the PRD at `prd.json` (in the same directory as this file)
-2. Read the progress log at `progress.md` (check Codebase Patterns section first)
+1. Read the PRD at `samples/ralph-bootstrap/prd.json`
+2. Read the progress log at `samples/ralph-bootstrap/progress.md` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
