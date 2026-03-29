@@ -10,7 +10,7 @@ $specs_content
 
 1. Read the specs above carefully and understand the requirements.
 2. Examine the codebase to identify files that need to be created or modified.
-3. Write a detailed implementation plan as a numbered checklist in IMPLEMENTATION_PLAN.md.
+3. Write a detailed implementation plan as a numbered checklist in `$impl_path/IMPLEMENTATION_PLAN.md`.
 4. Each step should be a concrete, actionable task (one checkbox per task).
 5. Order steps by dependency -- earlier steps should not depend on later ones.
 6. Every task must require a complete, working implementation. Never plan a task as "create skeleton", "add stub", or "scaffold" -- plan the real logic from the start.

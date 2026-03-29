@@ -72,7 +72,11 @@ def run_plan(
 
     for i in range(1, max_iters + 1):
         print(f"[plan] iteration {i}/{max_iters}", file=sys.stderr)  # noqa: T201
-        prompt = render_plan_prompt(issue_id=issue_id, specs_content=specs_content)
+        prompt = render_plan_prompt(
+            issue_id=issue_id,
+            specs_content=specs_content,
+            impl_path=impl_path,
+        )
         result = invoke_claude(prompt, model=model)
 
         status_block = extract_last_fenced_json(result.stdout)
@@ -132,6 +136,7 @@ def run_build(
         prompt = render_build_prompt(
             issue_id=issue_id,
             task_description=task.description,
+            impl_path=impl_path,
             quality_commands=quality_commands,
         )
         result = invoke_claude(prompt, model=model)

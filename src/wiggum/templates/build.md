@@ -8,7 +8,7 @@ $task_description
 
 ## Before You Start
 
-1. Read the Codebase Patterns section at the top of PROGRESS.md (if it exists). Previous iterations may have recorded patterns and gotchas that apply to your work.
+1. Read the Codebase Patterns section at the top of `$impl_path/PROGRESS.md` (if it exists). Previous iterations may have recorded patterns and gotchas that apply to your work.
 
 ## Instructions
 
@@ -30,7 +30,7 @@ $quality_section
 
 ## Progress Report
 
-APPEND to PROGRESS.md (never replace existing content):
+APPEND to `$impl_path/PROGRESS.md` (never replace existing content):
 
 ```
 ## [Date/Time] - [Task Description]
@@ -47,7 +47,7 @@ The learnings section is critical -- it helps future iterations avoid repeating 
 
 ## Consolidate Patterns
 
-If you discover a reusable pattern that future iterations should know, add it to the `## Codebase Patterns` section at the TOP of PROGRESS.md (create it if it does not exist):
+If you discover a reusable pattern that future iterations should know, add it to the `## Codebase Patterns` section at the TOP of `$impl_path/PROGRESS.md` (create it if it does not exist):
 
 ```
 ## Codebase Patterns

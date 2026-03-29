@@ -8,6 +8,7 @@ from wiggum.templates import render_template
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
 _QUALITY_SECTION_TEMPLATE = "4. Run quality checks:\n{commands}"
 
@@ -16,12 +17,14 @@ def render_plan_prompt(
     *,
     issue_id: str,
     specs_content: str,
+    impl_path: Path,
 ) -> str:
     """Render the plan-phase prompt with specs and issue context."""
     return render_template(
         "plan.md",
         issue_id=issue_id,
         specs_content=specs_content,
+        impl_path=str(impl_path),
     )
 
 
@@ -41,6 +44,7 @@ def render_build_prompt(
     *,
     issue_id: str,
     task_description: str,
+    impl_path: Path,
     quality_commands: Sequence[str] | None = None,
 ) -> str:
     """Render the build-phase prompt with task info and quality commands."""
@@ -49,5 +53,6 @@ def render_build_prompt(
         "build.md",
         issue_id=issue_id,
         task_description=task_description,
+        impl_path=str(impl_path),
         quality_section=quality_section,
     )
