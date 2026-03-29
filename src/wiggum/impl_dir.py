@@ -22,7 +22,7 @@ _PROGRESS_SKELETON = """\
 """
 
 
-def _find_git_root(*, start: Path | None = None) -> Path | None:
+def find_git_root(*, start: Path | None = None) -> Path | None:
     """Walk upward from *start* (default: cwd) to find the git root."""
     current = (start or Path.cwd()).resolve()
     while True:
@@ -36,7 +36,7 @@ def _find_git_root(*, start: Path | None = None) -> Path | None:
 
 def impl_dir_path(ticket: str, *, root: Path | None = None) -> Path:
     """Return the implementation directory path for a ticket relative to git root."""
-    git_root = root or _find_git_root()
+    git_root = root or find_git_root()
     if git_root is None:
         print("fatal: not a git repository", file=sys.stderr)  # noqa: T201
         sys.exit(2)
