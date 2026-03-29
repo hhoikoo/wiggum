@@ -172,7 +172,7 @@ Data flow: Config is loaded once at startup. Specs are always read from `.wiggum
 |---|---|---|---|
 | `[loop]` | | | |
 | `loop.max_plan_iterations` | `int` | `5` | Maximum plan mode iterations (exits early on completion signal). |
-| `loop.max_build_iterations` | `int` | `25` | Maximum build mode iterations before exiting with code 1. |
+| `loop.max_build_iterations` | `int` | `50` | Maximum build mode iterations before exiting with code 1. |
 | `loop.quality_commands` | `list[str]` | `[]` | Shell commands the build prompt instructs claude to run (e.g., `["uv run pyright", "uv run ruff check src/ tests/", "uv run pytest"]`). Empty means no quality instructions in the build prompt. |
 | `[model]` | | | |
 | `model.name` | `str \| null` | `null` | Model to use (passed as `--model` flag to the claude binary). Null means use the binary's default. |
@@ -183,7 +183,7 @@ Example `.wiggum/config.toml`:
 ```toml
 [loop]
 max_plan_iterations = 5
-max_build_iterations = 25
+max_build_iterations = 50
 quality_commands = [
     "uv run pyright",
     "uv run ruff check src/ tests/",
