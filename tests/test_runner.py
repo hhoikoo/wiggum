@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import signal
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -11,9 +12,20 @@ if TYPE_CHECKING:
 
 import pytest
 
+import wiggum.interrupt as interrupt_mod
 from wiggum.config import Config, LoopConfig, ModelConfig, ModelPhaseConfig
+from wiggum.interrupt import set_active_plan, set_active_process
 from wiggum.runner import resolve_specs, run_build, run_combined, run_plan
 from wiggum.subprocess_util import InvokeResult
+
+
+@pytest.fixture(autouse=True)
+def _restore_interrupt_state():
+    old_handler = signal.getsignal(signal.SIGINT)
+    yield
+    signal.signal(signal.SIGINT, old_handler)
+    set_active_process(None)
+    set_active_plan(None)
 
 
 def _setup_repo(tmp_path: Path, issue_id: str = "42") -> Path:
@@ -190,6 +202,21 @@ class TestRunPlan:
 
         assert code == 0
         assert mock_invoke.call_count == 3
+
+    @patch("wiggum.runner.invoke_claude")
+    @patch("wiggum.runner.register_handler")
+    def test_calls_register_handler(
+        self, mock_register: MagicMock, mock_invoke: MagicMock, tmp_path: Path
+    ):
+        root = _setup_repo(tmp_path)
+        mock_invoke.return_value = InvokeResult(
+            stdout='```json\n{"status": "complete"}\n```', exit_code=0
+        )
+        cfg = Config(loop=LoopConfig(max_plan_iterations=1))
+
+        run_plan("42", config=cfg, root=root)
+
+        mock_register.assert_called_once()
 
 
 _PLAN_TWO_TASKS = """\
@@ -378,6 +405,50 @@ class TestRunBuild:
         assert kwargs["model"] is None
 
     @patch("wiggum.runner.invoke_claude")
+    @patch("wiggum.runner.register_handler")
+    def test_calls_register_handler(
+        self, mock_register: MagicMock, mock_invoke: MagicMock, tmp_path: Path
+    ):
+        root = _setup_build_repo(tmp_path)
+        mock_invoke.return_value = InvokeResult(stdout="done", exit_code=0)
+        cfg = Config(loop=LoopConfig(max_build_iterations=1))
+
+        run_build("42", config=cfg, root=root)
+
+        mock_register.assert_called_once()
+
+    @patch("wiggum.runner.invoke_claude")
+    def test_sets_active_plan_before_invoke(
+        self, mock_invoke: MagicMock, tmp_path: Path
+    ):
+        root = _setup_build_repo(tmp_path)
+        captured: list[object] = []
+
+        def capture_state(prompt: str, *, model: object = None) -> InvokeResult:
+            captured.append(interrupt_mod._active_plan)
+            return InvokeResult(stdout="done", exit_code=0)
+
+        mock_invoke.side_effect = capture_state
+        cfg = Config(loop=LoopConfig(max_build_iterations=1))
+
+        run_build("42", config=cfg, root=root)
+
+        assert len(captured) == 1
+        assert captured[0] is not None
+
+    @patch("wiggum.runner.invoke_claude")
+    def test_clears_active_plan_after_invoke(
+        self, mock_invoke: MagicMock, tmp_path: Path
+    ):
+        root = _setup_build_repo(tmp_path)
+        mock_invoke.return_value = InvokeResult(stdout="done", exit_code=0)
+        cfg = Config(loop=LoopConfig(max_build_iterations=1))
+
+        run_build("42", config=cfg, root=root)
+
+        assert interrupt_mod._active_plan is None
+
+    @patch("wiggum.runner.invoke_claude")
     def test_json_summary_structure(
         self, mock_invoke: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
@@ -483,6 +554,29 @@ class TestRunCombined:
         with pytest.raises(SystemExit) as exc_info:
             run_combined("999", config=cfg, root=tmp_path)
         assert exc_info.value.code == 2
+
+    @patch("wiggum.runner.invoke_claude")
+    @patch("wiggum.runner.register_handler")
+    def test_calls_register_handler(
+        self,
+        mock_register: MagicMock,
+        mock_invoke: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = _setup_combined_repo(tmp_path)
+        mock_invoke.side_effect = [
+            InvokeResult(stdout='```json\n{"status": "complete"}\n```', exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+        ]
+        cfg = Config(loop=LoopConfig(max_plan_iterations=5, max_build_iterations=10))
+
+        run_combined("42", config=cfg, root=root)
+
+        # run_combined calls register_handler directly, then delegates to
+        # run_plan and run_build which each call it too -- assert it was called
+        mock_register.assert_called()
 
     @patch("wiggum.runner.invoke_claude")
     def test_json_summary_structure(

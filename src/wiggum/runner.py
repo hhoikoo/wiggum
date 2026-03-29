@@ -14,6 +14,7 @@ from wiggum.impl_dir import (
     resolve_progress_path,
     validate_impl_dir,
 )
+from wiggum.interrupt import register_handler, set_active_plan
 from wiggum.json_extract import extract_last_fenced_json
 from wiggum.plan import parse_plan
 from wiggum.progress import Outcome, append_iteration
@@ -61,6 +62,7 @@ def run_plan(
     Returns 0 on completion, 1 if max iterations reached without completion.
     Exits with code 2 on startup failures (missing specs directory).
     """
+    register_handler()
     specs_content = resolve_specs(issue_id, root=root)
     impl_path = impl_dir_path(issue_id, root=root)
     impl_path.mkdir(parents=True, exist_ok=True)
@@ -105,6 +107,7 @@ def run_build(
     Exits with code 2 on startup failures (missing impl dir or plan file).
     Prints a JSON summary to stdout at loop exit.
     """
+    register_handler()
     impl_path = validate_impl_dir(issue_id, root=root)
     plan_path = resolve_plan_path(impl_path)
     progress_path = resolve_progress_path(impl_path)
@@ -139,7 +142,11 @@ def run_build(
             impl_path=impl_path,
             quality_commands=quality_commands,
         )
-        result = invoke_claude(prompt, model=model)
+        set_active_plan(state)
+        try:
+            result = invoke_claude(prompt, model=model)
+        finally:
+            set_active_plan(None)
 
         state.mark_complete(task.line_number)
         state.write()
@@ -185,5 +192,6 @@ def run_combined(
     Returns 0 when all tasks complete, 1 if max iterations reached.
     Exits with code 2 on startup failures, 130 on SIGINT.
     """
+    register_handler()
     run_plan(issue_id, config=config, root=root)
     return run_build(issue_id, config=config, root=root)
