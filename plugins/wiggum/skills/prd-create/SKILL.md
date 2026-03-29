@@ -1,5 +1,5 @@
 ---
-name: create-feature-prd
+name: prd-create
 description: Given a proposal ticket, research the codebase and web, draft a PRD document, iterate on feedback, and create a PR. Designed to run in a spawned tmux session with --dangerously-skip-permissions.
 argument-hint: "<ticket-id>"
 ---
@@ -7,6 +7,8 @@ argument-hint: "<ticket-id>"
 # Create Feature PRD
 
 Autonomous PRD generation skill. Runs in a spawned tmux session. Performs massive parallel research, drafts a structured PRD, iterates with the user on open questions, and creates a PR.
+
+This skill produces a **proposal**, not an implementation. The ticket it receives is a proposal ticket that resolves when the PRD pull request merges. A separate implementation ticket is created downstream from the approved PRD. All outputs -- research documents, the PRD itself, the PR description -- should be framed as defining requirements and design, not as implementing a feature.
 
 This skill is an **orchestrator**. It coordinates subagents but keeps its own context clean. Heavy content (raw research, full PRD text, section edits) lives on disk and is read by subagents, not loaded into the main context.
 
@@ -18,7 +20,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
    ```bash
    bash ${CLAUDE_SKILL_DIR}/scripts/fetch-issue.sh <ticket-id>
    ```
-   Store the `summary` and `description` fields. This is the polished feature summary from `/wiggum:propose-feature`.
+   Store the `summary` and `description` fields. This is the polished feature summary from `/wiggum:feature-propose`.
 
 3. Read the project's CLAUDE.md and directory structure to understand the codebase context.
 
@@ -91,7 +93,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
 
 17. Push and create PR. Delegate to `/wiggum:create-pr`:
     - Title: `docs(<ticket-id>): <feature-name>`
-    - Body: executive summary + link to the PRD file in the repo
+    - Body: frame as a proposal -- "PRD for <feature>", followed by the executive summary and a link to the PRD file in the repo. Do not use implementation language ("this PR implements...").
     - Link PR to the tracking issue
 
 18. For each unresolved open question remaining in the PRD, post it as a separate review comment on the PR so reviewers can address them.

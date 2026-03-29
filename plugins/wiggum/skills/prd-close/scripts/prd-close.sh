@@ -1,0 +1,1 @@
+../../../scripts/prd-close.sh

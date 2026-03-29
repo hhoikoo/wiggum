@@ -21,7 +21,7 @@ bash ${CLAUDE_SKILL_DIR}/scripts/session-launch.sh --ticket-id 42
 Each skill follows the Agent Skills standard layout with a `scripts/` subdirectory:
 
 ```
-skills/propose-feature/
+skills/feature-propose/
 ├── SKILL.md
 ├── reference.md                                                  # optional supporting files
 └── scripts/

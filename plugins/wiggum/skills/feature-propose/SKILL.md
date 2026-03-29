@@ -1,5 +1,5 @@
 ---
-name: propose-feature
+name: feature-propose
 description: Interactively draft a feature proposal and spawn a background PRD generation session. Use when starting a new feature or significant change.
 argument-hint: "[feature description in plain English]"
 ---
@@ -18,13 +18,17 @@ Read `$ARGUMENTS` as the initial feature idea. If the description is vague or in
 
 Keep the back-and-forth brief -- 2-3 rounds max. Produce a polished feature summary: a concise paragraph describing the feature, its motivation, and its scope. This summary will be the body of the tracking ticket and the input to PRD generation.
 
+**Framing**: The summary describes what needs to be specified, not how to implement it. Write from the perspective of "what should the PRD cover?" -- motivation, scope boundaries, key questions to resolve. Do not include implementation details, acceptance criteria, CLI signatures, or architecture decisions; those belong in the PRD itself. Never reference local file paths or machine-specific resources; the issue must be self-contained and readable by anyone.
+
 ## Phase 2: Create Tracking Ticket
 
 Delegate to the `/wiggum:create-issue` skill to create a GitHub issue:
 
 - **Type**: Task (this is a proposal document, not an implementation ticket)
-- **Title**: concise feature name in imperative form
+- **Title**: `Proposal: <feature name>` -- concise feature name, no implementation verbs
 - **Body**: the polished feature summary from Phase 1
+
+This ticket tracks the *proposal*, not the implementation. It resolves when the PRD pull request merges. A separate implementation ticket is created downstream from the approved PRD.
 
 Capture the issue number from the skill output.
 
@@ -37,7 +41,7 @@ bash ${CLAUDE_SKILL_DIR}/scripts/session-launch.sh \
   --ticket-id <ticket-id> \
   --repo-path "$(git rev-parse --show-toplevel)" \
   --base-branch main \
-  --command "/wiggum:create-feature-prd <ticket-id>"
+  --command "/wiggum:prd-create <ticket-id>"
 ```
 
 If the script fails, report the error and stop. Do not retry.
