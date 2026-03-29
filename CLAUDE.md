@@ -53,7 +53,7 @@ bin/                         # convenience symlinks (claude-dev)
 ./bin/claude-dev --resume                  # resume a previous session
 ```
 
-Plugin skills are namespaced: `/wiggum:propose-feature`, `/wiggum:prd-create`, `/wiggum:prd-review`, `/wiggum:prd-close`.
+Plugin skills are namespaced: `/wiggum:feature-propose`, `/wiggum:prd-create`, `/wiggum:prd-review`, `/wiggum:prd-close`.
 
 ## Verify Before Assuming
 

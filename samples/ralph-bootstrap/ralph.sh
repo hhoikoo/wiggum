@@ -27,7 +27,7 @@ if [ ! -f "$PRD_FILE" ]; then
   specs_dir="${REPO_ROOT}/.wiggum/specs/${ISSUE_ID}"
   if [ ! -d "$specs_dir" ]; then
     echo "No specs directory found at ${specs_dir}" >&2
-    echo "Run /wiggum:propose-feature first to generate a PRD." >&2
+    echo "Run /wiggum:feature-propose first to generate a PRD." >&2
     exit 1
   fi
 

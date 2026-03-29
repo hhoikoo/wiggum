@@ -1,5 +1,5 @@
 ---
-name: propose-feature
+name: feature-propose
 description: Interactively draft a feature proposal and spawn a background PRD generation session. Use when starting a new feature or significant change.
 argument-hint: "[feature description in plain English]"
 ---

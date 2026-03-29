@@ -6,7 +6,7 @@ argument-hint: "<ticket-id>"
 
 # PRD Close
 
-Cleans up the resources created by `/wiggum:propose-feature` after the proposal PR has been merged or abandoned. Run this from your interactive Claude Code session -- not from the tmux session being closed.
+Cleans up the resources created by `/wiggum:feature-propose` after the proposal PR has been merged or abandoned. Run this from your interactive Claude Code session -- not from the tmux session being closed.
 
 ## Workflow
 

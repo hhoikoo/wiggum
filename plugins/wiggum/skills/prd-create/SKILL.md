@@ -20,7 +20,7 @@ This skill is an **orchestrator**. It coordinates subagents but keeps its own co
    ```bash
    bash ${CLAUDE_SKILL_DIR}/scripts/fetch-issue.sh <ticket-id>
    ```
-   Store the `summary` and `description` fields. This is the polished feature summary from `/wiggum:propose-feature`.
+   Store the `summary` and `description` fields. This is the polished feature summary from `/wiggum:feature-propose`.
 
 3. Read the project's CLAUDE.md and directory structure to understand the codebase context.
 
