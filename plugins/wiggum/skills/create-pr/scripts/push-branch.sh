@@ -9,12 +9,11 @@ set -euo pipefail
 branch=$(git branch --show-current)
 had_remote=false
 
-if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
   had_remote=true
-  git push >&2
-else
-  git push -u origin HEAD >&2
 fi
+
+git push -u origin HEAD >&2
 
 jq -n \
   --arg branch "$branch" \
