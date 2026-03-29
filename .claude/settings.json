@@ -1,68 +1,30 @@
 {
-    "respectGitignore": true,
-    "attribution": {
-        "commit": "",
-        "pr": ""
-    },
-    "includeCoAuthoredBy": false,
-    "enabledPlugins": {
-        "wiggum@wiggum": true
-    },
-    "extraKnownMarketplaces": {
-        "wiggum": {
-            "source": {
-                "source": "github",
-                "repo": "hhoikoo/wiggum"
-            },
-            "autoUpdate": true
-        }
-    },
-    "permissions": {
-        "deny": [
-            "Read(.env)",
-            "Read(.env.*)",
-            "Write(.env)",
-            "Write(.env.*)"
-        ],
-        "defaultMode": "acceptEdits"
-    },
-    "hooks": {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/guard-destructive-commands.sh",
-                        "timeout": 5000
-                    },
-                    {
-                        "type": "command",
-                        "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/validate-pr-body.sh",
-                        "timeout": 10000
-                    }
-                ]
-            },
-            {
-                "matcher": "Skill",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/log-skill-invocation.sh",
-                        "timeout": 5000
-                    }
-                ]
-            },
-            {
-                "matcher": "Agent",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/redirect-builtin-agent.sh",
-                        "timeout": 5000
-                    }
-                ]
-            }
-        ]
+  "respectGitignore": true,
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "enabledPlugins": {
+    "wiggum-util@wiggum": true,
+    "wiggum@wiggum": true
+  },
+  "extraKnownMarketplaces": {
+    "wiggum": {
+      "source": {
+        "source": "github",
+        "repo": "hhoikoo/wiggum"
+      },
+      "autoUpdate": true
     }
+  }
 }

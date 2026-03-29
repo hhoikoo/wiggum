@@ -1,0 +1,7 @@
+{
+  "name": "wiggum-util",
+  "description": "Companion utilities for day-to-day development workflows -- shipping changes, handling CI and review feedback, resolving conflicts, and looking up Claude Code documentation.",
+  "author": { "name": "wiggum" },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/hhoikoo/wiggum"
+}

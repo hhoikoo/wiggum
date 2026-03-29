@@ -1,0 +1,1 @@
+../../../scripts/issue-create.sh

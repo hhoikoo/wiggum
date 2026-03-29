@@ -1,0 +1,1 @@
+../../../scripts/pr-link-issue.sh

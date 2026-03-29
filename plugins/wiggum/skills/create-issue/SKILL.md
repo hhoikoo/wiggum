@@ -3,8 +3,7 @@ name: create-issue
 description: Create a GitHub issue. Accepts structured input or free-text for interactive creation. Use when creating tickets programmatically or interactively.
 argument-hint: "[-t <type>] [-s <summary>] [-b <body-file>] [-P <parent>] [-S <points>] [-l <label>]... [description]"
 allowed-tools:
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(gh *)
   - Bash(mkdir *)
   - Read
@@ -73,7 +72,7 @@ gh api user --jq .login
 
 4. Create the issue (body is applied by the provider at creation time):
    ```bash
-   .claude/scripts/issue-create.sh -t "<type>" -s "<summary>" [-b <body-file>] [-P <parent>] [-a <assignee>] [-S <points>] [-g <repo>] [-l <label>]...
+   bash ${CLAUDE_SKILL_DIR}/scripts/issue-create.sh -t "<type>" -s "<summary>" [-b <body-file>] [-P <parent>] [-a <assignee>] [-S <points>] [-g <repo>] [-l <label>]...
    ```
    Read the created issue key from stdout.
 

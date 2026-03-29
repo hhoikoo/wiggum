@@ -1,0 +1,1 @@
+../../../scripts/pr-resolve-thread.sh

@@ -1,0 +1,1 @@
+../../../scripts/pr-fetch-comments.sh

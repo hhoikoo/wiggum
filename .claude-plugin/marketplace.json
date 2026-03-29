@@ -11,6 +11,13 @@
       "description": "Ralph Loop PRD skills: interactive proposal drafting and autonomous PRD generation with parallel research.",
       "keywords": ["ralph", "proposal", "prd", "research", "tmux", "worktree"],
       "category": "ralph"
+    },
+    {
+      "name": "wiggum-util",
+      "source": "./plugins/wiggum-util",
+      "description": "Companion utilities for day-to-day development workflows -- shipping changes, handling CI and review feedback, resolving conflicts, and looking up Claude Code documentation.",
+      "keywords": ["utility", "ci", "review", "rebase", "push"],
+      "category": "util"
     }
   ]
 }
