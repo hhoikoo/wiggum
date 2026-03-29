@@ -17,7 +17,11 @@ Cleans up the resources created by `/wiggum:feature-propose` after the proposal 
    bash ${CLAUDE_SKILL_DIR}/scripts/prd-close.sh <ticket-id> "$(git rev-parse --show-toplevel)"
    ```
 
-3. Report the JSON output to the user, summarizing what was cleaned up:
+3. If the script exits 1 with a `pr_open` status, the PR for this ticket is still open. Ask the user:
+   - **Merge and continue**: merge the PR with `gh pr merge <pr_number>`, then re-run the cleanup script from step 2.
+   - **Abort**: stop without cleaning up.
+
+4. On success (exit 0), report the JSON output to the user, summarizing what was cleaned up:
    - tmux window killed (or already gone)
    - worktree removed (or already gone)
    - local branch deleted (or not fully merged / already gone)
