@@ -20,6 +20,19 @@ tmux_closed="false"
 worktree_removed="false"
 branch_deleted="false"
 
+# --- Check PR status ---
+
+pr_json=$(gh pr list --head "$branch_name" --json number,url,state --jq '.[0]' 2>/dev/null || true)
+
+if [ -n "$pr_json" ]; then
+  pr_state=$(printf '%s' "$pr_json" | jq -r '.state')
+  if [ "$pr_state" = "OPEN" ]; then
+    echo "PR for branch ${branch_name} is still open" >&2
+    printf '%s' "$pr_json" | jq '{status: "pr_open", pr_number: .number, pr_url: .url}'
+    exit 1
+  fi
+fi
+
 # --- Kill tmux window ---
 
 if tmux has-session -t "$session_name" 2>/dev/null; then
