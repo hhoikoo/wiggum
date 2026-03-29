@@ -42,7 +42,7 @@ Write the PRD with these sections in order:
 3-5 bullets. Each includes the exclusion rationale in parentheses.
 
 ### Architecture
-One high-level diagram (ASCII art or Mermaid). Boxes and arrows showing major components and their relationships.
+One high-level Mermaid diagram. Boxes and arrows showing major components and their relationships. Use a fenced code block with the `mermaid` language tag so it renders natively on GitHub.
 
 ### Design Decisions
 Numbered list. Each entry: one-line title + 2-3 sentence rationale explaining the tradeoff.
