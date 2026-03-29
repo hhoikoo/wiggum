@@ -9,8 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - Skill
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(gh *)
   - "Bash(uv run pre-commit run --all-files)"
 ---
@@ -21,18 +20,15 @@ Address review comments on a pull request.
 
 ## Workflow
 
-### 1. Find the PR
-
-- If `$ARGUMENTS` contains a PR number, use it.
-- Otherwise, detect from the current branch: `gh pr view --json number,url`
-
-### 2. Fetch Review Comments
+### 1. Fetch Review State
 
 ```bash
-.claude/scripts/pr-fetch-comments.sh {number}
+bash ${CLAUDE_SKILL_DIR}/scripts/fetch-review-state.sh $ARGUMENTS
 ```
 
-### 3. Triage Each Comment
+Parse the JSON output: `pr_number`, `comments` (array), `unresolved_threads` (array). If no PR is found, stop.
+
+### 2. Triage Each Comment
 
 Assign a confidence score (0-100%) that the comment identifies a real issue.
 
@@ -46,14 +42,14 @@ Assign a confidence score (0-100%) that the comment identifies a real issue.
 - 30-69%: Optional -- fix if trivial, otherwise resolve with explanation.
 - 0-29%: Resolve as spurious.
 
-### 4. Fix Valid Issues
+### 3. Fix Valid Issues
 
 - Make the code changes.
 - Run `uv run pre-commit run --all-files` to verify the fix.
 - Commit using the `/wiggum:commit` skill (MUST delegate, never commit directly).
 - Group related fixes into a single commit when they address the same concern.
 
-### 5. Reply and Resolve Threads
+### 4. Reply and Resolve Threads
 
 Reply to each comment using the GitHub API:
 
@@ -61,14 +57,13 @@ Reply to each comment using the GitHub API:
 gh api repos/{owner}/{repo}/pulls/{number}/comments/{comment_id}/replies -f body="<response>"
 ```
 
-Fetch unresolved thread IDs, then resolve them:
+Resolve addressed threads:
 
 ```bash
-.claude/scripts/pr-fetch-threads.sh {number}
-.claude/scripts/pr-resolve-thread.sh {thread_id} [{thread_id}...]
+bash ${CLAUDE_SKILL_DIR}/scripts/pr-resolve-thread.sh {thread_id} [{thread_id}...]
 ```
 
-### 6. Output Summary
+### 5. Output Summary
 
 Print a table:
 

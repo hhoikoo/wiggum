@@ -2,8 +2,7 @@
 name: rebase-resolve-conflicts
 description: Rebase the current branch onto its base branch and resolve merge conflicts. Use when the base branch has advanced and the current branch needs to incorporate upstream changes.
 allowed-tools:
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(git *)
   - "Bash(uv run pre-commit run --all-files)"
   - Read
@@ -16,49 +15,49 @@ Rebase the current branch onto its base branch, resolving any merge conflicts th
 
 ## Workflow
 
-### 1. Resolve Base Branch
+### 1. Setup
 
 ```bash
-.claude/scripts/resolve-base-branch.sh
+bash ${CLAUDE_SKILL_DIR}/scripts/rebase-setup.sh
 ```
 
-### 2. Fetch and Check
+Parse the JSON output:
+- `needs_rebase: false` -- branch is up to date or rebase completed cleanly. Report and stop.
+- `needs_rebase: true` -- rebase stopped with conflicts. `conflicts` contains `[{file, status}]`.
+
+If there are more than 5 conflicting files, ask the user whether to continue or abort (`git rebase --abort`).
+
+### 2. Resolve Conflicts
+
+Loop over each conflicting file:
+
+2a. Read the conflicting file to see the conflict markers.
+
+2b. Read the git log for the base branch commits that touch this file to understand the intent of upstream changes:
+```bash
+git log REBASE_HEAD..HEAD -- <file>
+```
+
+2c. Resolve the conflict by editing the file -- remove all conflict markers and produce the correct merged result that preserves the intent of both sides.
+
+2d. Stage the resolved file:
+```bash
+git add <file>
+```
+
+If a conflict is ambiguous and both sides make incompatible changes to the same logic, ask the user which side to prefer.
+
+### 3. Continue Rebase
+
+After all conflicts in this step are resolved:
 
 ```bash
-git fetch origin <base>
+git rebase --continue
 ```
 
-Check if a rebase is needed:
+If new conflicts arise (the rebase has multiple commits to replay), go back to step 2 with the new conflict list. Detect conflicts from the `git rebase --continue` exit code and `git diff --name-only --diff-filter=U`.
 
-```bash
-git log HEAD..origin/<base> --oneline
-```
-
-If no commits are returned, the branch is already up to date. Report this and stop.
-
-### 3. Rebase
-
-```bash
-git rebase origin/<base>
-```
-
-If the rebase completes without conflicts, skip to step 5.
-
-### 4. Resolve Conflicts
-
-For each conflict:
-
-1. List conflicting files: `git diff --name-only --diff-filter=U`.
-2. Read each conflicting file and understand both sides of the conflict.
-3. Read the git log for the base branch commits that touch the conflicting files to understand the intent of upstream changes: `git log HEAD..origin/<base> -- <file>`.
-4. Resolve the conflict by editing the file -- remove all conflict markers and produce the correct merged result that preserves the intent of both sides.
-5. Stage the resolved file: `git add <file>`.
-6. Continue the rebase: `git rebase --continue`.
-7. If further conflicts arise, repeat from step 4.1.
-
-If a conflict is ambiguous and both sides make incompatible changes to the same logic, ask the user which side to prefer before proceeding.
-
-### 5. Verify
+### 4. Verify
 
 Run `uv run pre-commit run --all-files` to confirm the rebased code still passes.
 
@@ -69,7 +68,7 @@ git add <fixed-files>
 git commit --amend --no-edit
 ```
 
-### 6. Push
+### 5. Push
 
 If the branch tracks a remote, force-push with lease:
 
@@ -79,9 +78,7 @@ git push --force-with-lease
 
 If no remote tracking branch exists, skip the push and inform the user.
 
-### 7. Report
-
-Print a summary:
+### 6. Report
 
 ```
 Rebased <branch> onto <base> (<N> commits replayed).
@@ -92,7 +89,7 @@ Verification: passed
 ## Rules
 
 - Always use `--force-with-lease`, never `--force`.
-- If the rebase produces more than 5 conflicting files in a single step, pause and ask the user whether to continue or abort (`git rebase --abort`).
+- If the rebase produces more than 5 conflicting files in a single step, pause and ask the user whether to continue or abort.
 - Do not skip verification after rebase.
 - If verification fails and the fix is non-trivial, ask the user before amending.
 

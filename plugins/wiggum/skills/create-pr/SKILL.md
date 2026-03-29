@@ -4,8 +4,7 @@ description: Create a pull request following project conventions. Use when the b
 argument-hint: "[--no-review]"
 allowed-tools:
   - Agent
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(gh *)
   - Bash(git *)
   - Bash(mktemp*)
@@ -20,7 +19,7 @@ Create a pull request following project conventions.
 0. **Resolve base branch:**
 
    ```bash
-   .claude/scripts/resolve-base-branch.sh
+   bash ${CLAUDE_SKILL_DIR}/scripts/resolve-base-branch.sh
    ```
 
    Use the output as `<base>` throughout this skill.
@@ -31,13 +30,14 @@ Create a pull request following project conventions.
    - `git diff <base>...HEAD --stat` to see the file-level summary of changes.
 
 2. **Push branch:**
-   - Check if the current branch tracks a remote: `git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null`.
-   - If no remote tracking branch, push with `git push -u origin HEAD`.
-   - If remote tracking exists but local is ahead, `git push`.
+
+   ```bash
+   bash ${CLAUDE_SKILL_DIR}/scripts/push-branch.sh
+   ```
 
 3. **Generate PR title:**
-   - Follow the same format as commit subject lines from `/wiggum:commit`: `<type>(BA-XXXX): <short description>` or `<type>: <short description>`.
-   - Derive the type from the branch prefix (e.g., `feat/BA-1234/add-state-machine` -> `feat`).
+   - Follow the same format as commit subject lines from `/wiggum:commit`: `<type>(<ticket-id>): <short description>` or `<type>: <short description>`.
+   - Derive the type from the branch prefix (e.g., `feat/42/add-state-machine` -> `feat`).
    - Extract the ticket ID from the branch name if present (e.g., `feat/<ticket-id>/add-widget` -> `<ticket-id>`).
    - Derive the description from the branch short-name or commit messages. Capitalize first letter, no period, imperative mood.
 
@@ -52,13 +52,15 @@ Create a pull request following project conventions.
      7. Return the temp file path.
 
 5. **Create the PR:**
-   gh pr create --title "<title>" --body-file <temp-path> --assignee @me --base <base>
-   - `@me` resolves to the authenticated GitHub user dynamically.
+   `gh pr create --title "<title>" --body-file <temp-path> --assignee @me --base <base>`
 
 5a. **Link issue to PR:**
    - If a ticket ID was resolved in step 0:
      1. Wait 15 seconds (gives `pr-issue-link.yml` CI workflow time to run first).
-     2. Call .claude/scripts/pr-link-issue.sh <pr-number> <ticket-id> as backup -- if CI already linked it, the script exits cleanly; if not, it appends the reference.
+     2. Call as backup -- if CI already linked it, the script exits cleanly; if not, it appends the reference:
+        ```bash
+        bash ${CLAUDE_SKILL_DIR}/scripts/pr-link-issue.sh <pr-number> <ticket-id>
+        ```
 
 6. **Request reviews:**
    - **Skip this step** if `$ARGUMENTS` contains `--no-review`.
@@ -66,8 +68,6 @@ Create a pull request following project conventions.
    - Request review from each resolved reviewer:
      ```bash
      gh pr edit --add-reviewer <reviewer1>
-     gh pr edit --add-reviewer <reviewer2>
-     ...
      ```
 
 7. **Documentation check:**
@@ -78,26 +78,25 @@ Create a pull request following project conventions.
    - **Skip if already run recently:** If a documentation check was already performed on the same set of commits earlier in this pipeline run (e.g., by the `/wiggum:commit` skill), skip this step.
 
 8. **Report:**
-   - Print using this template:
-     ```
-     =========================================================================
-     PR CREATED - AWAITING REVIEW
-     =========================================================================
+   ```
+   =========================================================================
+   PR CREATED - AWAITING REVIEW
+   =========================================================================
 
-     PR: <PR URL>
-     Branch: <branch name>
-     Ticket: <ticket-id> (or "none")
+   PR: <PR URL>
+   Branch: <branch name>
+   Ticket: <ticket-id> (or "none")
 
-     Summary:
-     - <what was implemented>
+   Summary:
+   - <what was implemented>
 
-     Status:
-     - Reviews requested: <list of reviewers> (or SKIPPED)
+   Status:
+   - Reviews requested: <list of reviewers> (or SKIPPED)
 
-     =========================================================================
-     Awaiting review feedback.
-     =========================================================================
-     ```
+   =========================================================================
+   Awaiting review feedback.
+   =========================================================================
+   ```
 
 ## Rules
 

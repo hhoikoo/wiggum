@@ -3,8 +3,7 @@ name: create-branch
 description: Create a correctly named branch and check it out. Use when starting work on a ticket or a quick fix and you need a branch.
 argument-hint: "<ticket-id> or type: description"
 allowed-tools:
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(git *)
   - Bash(gh *)
 ---
@@ -13,13 +12,18 @@ allowed-tools:
 
 Create a branch and check it out. Supports two modes: ticket-based (with ticket ID) and description-based (for quick fixes without a ticket).
 
-## Step 0: Resolve default branch
+## Step 0: Resolve default branch and sync
 
 ```bash
-.claude/scripts/resolve-base-branch.sh
+bash ${CLAUDE_SKILL_DIR}/scripts/setup-branch.sh
 ```
 
-Use the output as `<default-branch>` throughout this skill.
+Parse the JSON output: `base_branch` is the default branch, `current_branch` is where you are, `merged` indicates if upstream changes were integrated.
+
+If `current_branch` is not `base_branch`, stop and ask the user how to proceed:
+- Continue and branch from the current branch.
+- Switch to the default branch first, then create the new branch.
+- Switch to a different branch the user specifies.
 
 ## Usage
 
@@ -31,28 +35,13 @@ If `$ARGUMENTS` starts with a number (GitHub issue number, e.g., `42`), use **ti
 
 ## Workflow
 
-### Step 1: Check current branch
-
-- Run `git branch --show-current` to determine the current branch.
-- If NOT on the default branch, stop and ask the user how to proceed. Present these options:
-  - Continue and branch from the current branch.
-  - Switch to the default branch first, then create the new branch.
-  - Switch to a different branch the user specifies.
-- If on the default branch:
-  1. Run `git fetch origin <default-branch>` to check for upstream changes.
-  2. If `git log HEAD..origin/<default-branch> --oneline` returns any commits, there are upstream changes to integrate:
-     - If the working tree is dirty, run `git stash` first.
-     - Run `git merge --ff-only origin/<default-branch>`.
-     - If stashed, run `git stash pop`.
-  3. Proceed to Step 3 to create the branch.
-
-### Step 2: Determine type and short-name
+### Step 1: Determine type and short-name
 
 **Ticket mode** (argument matches `<ticket-id>`):
 
 1. Fetch ticket details:
    ```bash
-   .claude/scripts/issue-view.sh <ticket-id>
+   bash ${CLAUDE_SKILL_DIR}/scripts/issue-view.sh <ticket-id>
    ```
 2. Determine the commit type prefix. Use the issue type mappings below, starting from the issue type's `commit_type`, then refine using the ticket title and the inference table.
    Issue type to commit type mapping:
@@ -72,8 +61,7 @@ If `$ARGUMENTS` starts with a number (GitHub issue number, e.g., `42`), use **ti
 
 For both modes, convert the short-name to kebab-case, lowercase, stripping filler words (the, a, an, is, for, to, in, on, with).
 
-
-### Step 3: Create and checkout branch
+### Step 2: Create and checkout branch
 
 **Ticket mode:**
 ```bash
@@ -85,7 +73,7 @@ git checkout -b <type>/<ticket-id>/<short-name>
 git checkout -b <type>/<short-name>
 ```
 
-### Step 4: Report
+### Step 3: Report
 
 Print the branch name and a one-line summary.
 

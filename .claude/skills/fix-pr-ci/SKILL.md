@@ -9,8 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - Skill
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh)
-  - Bash($CLAUDE_PROJECT_DIR/.claude/scripts/*.sh *)
+  - Bash(bash *)
   - Bash(gh *)
   - "Bash(uv run pre-commit run --all-files)"
 ---
@@ -21,44 +20,36 @@ Diagnose and fix CI failures on the current PR or branch.
 
 ## Workflow
 
-### 1. Identify Failing Checks
-
-- If `$ARGUMENTS` contains a PR number, use it. Otherwise detect from the current branch: `gh pr view --json number`
-- List check status: `gh pr checks`
-- If all checks pass, report success and stop.
-
-### 2. Fetch Failure Logs
-
-For each failing check:
+### 1. Fetch Failing Checks
 
 ```bash
-gh run view --log-failed <run-id>
+bash ${CLAUDE_SKILL_DIR}/scripts/fetch-failing-checks.sh $ARGUMENTS
 ```
 
-If the log is too large, focus on the last 200 lines of the failing job step.
+Parse the JSON output. If empty (`[]`), all checks pass -- report success and stop. Otherwise proceed with the list of failures, each containing `name`, `conclusion`, `log_url`, and `log_excerpt`.
 
-### 3. Diagnose
+### 2. Diagnose
 
-Read the failure logs and categorize the failure:
+Read the failure logs from the script output and categorize each failure:
 
 - **Lint** -- linter errors. Read the project's linter config and the flagged files to understand context.
 - **Build** -- compilation or Docker build errors. Read the project's dependency manifest, `Dockerfile`, and the failing source files.
 - **Test** -- test failures. Read the failing test file and the source code it exercises.
 - **Workflow** -- CI pipeline configuration errors. Read the workflow YAML.
 
-### 4. Fix
+### 3. Fix
 
 - Apply the minimal fix for each failure.
 - Run `uv run pre-commit run --all-files` locally to verify the fix before pushing.
 - If verification fails, iterate until it passes.
 
-### 5. Commit and Push
+### 4. Commit and Push
 
 - Invoke the `/wiggum:commit` skill. The `/wiggum:commit` skill handles pushing when a PR exists.
 
-### 6. Verify
+### 5. Verify
 
-- Wait for CI to start: `gh run list --branch <current-branch> --limit 1` (substitute the current branch name).
+- Wait for CI to start: `gh run list --branch <current-branch> --limit 1`.
 - Report which checks were failing and what was fixed.
 
 ## Rules
