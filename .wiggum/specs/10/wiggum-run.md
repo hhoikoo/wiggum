@@ -1,4 +1,4 @@
-# PRD: Implement Core Ralph Loop CLI (`wiggum run`)
+# PRD: Implement Core Ralph Loop CLI (`wiggum run`) and Companion Skills
 
 **Ticket:** #10
 **Date:** 2026-03-29
@@ -7,11 +7,11 @@
 
 ## Summary
 
-The project needs a Python CLI (`wiggum run`) to replace the bash `ralph.sh` bootstrap script, providing a two-mode plan/build loop that drives autonomous Claude Code invocations. The solution adds three commands -- `wiggum run <issue-id>` (combined), `wiggum run plan <issue-id>` (plan-only), and `wiggum run build <issue-id>` (build-only) -- using direct `subprocess.Popen` calls against the `claude` binary, with config from `.wiggum/config.toml` validated by pydantic. The primary tradeoff is deliberately skipping hexagonal architecture (no ports/adapters) in favor of shipping a working loop fast, accepting that subprocess calls will be inlined and refactored later. `wiggum run` is one component in a larger orchestration pipeline: companion skills (`feature-work-on`, `feature-stop-work-on`) handle environment setup (implementation ticket, worktree, tmux session) and teardown, while `wiggum run` operates within that prepared environment.
+The project needs a Python CLI (`wiggum run`) to replace the bash `ralph.sh` bootstrap script, providing a two-mode plan/build loop that drives autonomous Claude Code invocations, plus two companion skills (`feature-work-on` and `feature-stop-work-on`) that manage the environment lifecycle around it. The solution adds three commands -- `wiggum run <issue-id>` (combined), `wiggum run plan <issue-id>` (plan-only), and `wiggum run build <issue-id>` (build-only) -- using direct `subprocess.Popen` calls against the `claude` binary, with config from `.wiggum/config.toml` validated by pydantic. The primary tradeoff is deliberately skipping hexagonal architecture (no ports/adapters) in favor of shipping a working loop fast, accepting that subprocess calls will be inlined and refactored later. The companion skills handle everything outside the loop: `feature-work-on` creates an implementation ticket, sets up a git worktree and tmux session, and launches `wiggum run`; `feature-stop-work-on` tears down the worktree, tmux session, and manages the PR.
 
-Each mode runs an iteration loop. Plan mode reads specs from a configurable specs directory (defaulting to `.wiggum/specs/<issue-id>/` relative to the git root), feeds a plan prompt template to `claude -p --dangerously-skip-permissions`, and produces/updates `IMPLEMENTATION_PLAN.md` within `.wiggum/implementation/<ticket-num>/`. Plan mode runs up to `max_plan_iterations` (default 5) iterations but exits early when the claude agent signals completion via a fenced JSON code block containing `{"status": "complete"}`. Build mode reads that plan, picks the top unchecked task, implements it via a build prompt template, runs quality checks defined in config, marks the task done, and the build prompt instructs claude to run the `/commit` skill. Each iteration spawns a fresh `claude -p` process -- no conversation history carries over. A SIGINT handler resets any uncommitted `[x]` marks and terminates the subprocess gracefully. `PROGRESS.md` (also in `.wiggum/implementation/<ticket-num>/`) accumulates an append-only log across iterations using heading-per-iteration format, and the build prompt instructs claude to update both `PROGRESS.md` (patterns section) and the project's `CLAUDE.md` files with reusable conventions learned during implementation.
+Each mode runs an iteration loop. Plan mode reads specs from `.wiggum/specs/<issue-id>/` (hardcoded, relative to the git root), feeds a plan prompt template to `claude -p --dangerously-skip-permissions`, and produces/updates `IMPLEMENTATION_PLAN.md` within `.wiggum/implementation/<ticket-num>/`. Plan mode runs up to `max_plan_iterations` (default 5) iterations but exits early when the claude agent signals completion via a fenced JSON code block containing `{"status": "complete"}`. Build mode reads that plan, picks the top unchecked task, implements it via a build prompt template, runs quality checks defined in config, marks the task done, and the build prompt instructs claude to run the `/commit` skill. Each iteration spawns a fresh `claude -p` process -- no conversation history carries over. A SIGINT handler resets any uncommitted `[x]` marks and terminates the subprocess gracefully. `PROGRESS.md` (also in `.wiggum/implementation/<ticket-num>/`) accumulates an append-only log across iterations using heading-per-iteration format, and the build prompt instructs claude to update both `PROGRESS.md` (patterns section) and the project's `CLAUDE.md` files with reusable conventions learned during implementation.
 
-This approach directly ports the proven `ralph.sh` loop to Python with three improvements: structured config (TOML + pydantic with defaults and CLI overrides), clean interrupt handling (SIGINT resets state instead of corrupting it), and explicit plan/build mode separation (the bash script conflates both into a single prompt). The alternative of building hexagonal architecture first was rejected by the ticket scope -- the loop is the critical path and needs to work before abstractions are layered on.
+This approach directly ports the proven `ralph.sh` loop to Python with three improvements: structured config (TOML + pydantic with defaults and CLI overrides), clean interrupt handling (SIGINT resets state instead of corrupting it), and explicit plan/build mode separation (the bash script conflates both into a single prompt). The companion skills follow the same patterns as `feature-propose` (tmux session + worktree via `session-launch.sh`) and reuse existing shared scripts. The alternative of building hexagonal architecture first was rejected by the ticket scope -- the loop is the critical path and needs to work before abstractions are layered on.
 
 ## Goals
 
@@ -22,28 +22,35 @@ This approach directly ports the proven `ralph.sh` loop to Python with three imp
 - Handle SIGINT gracefully: terminate subprocess, reset uncommitted task marks in `IMPLEMENTATION_PLAN.md`, exit 130.
 - Maintain an append-only `PROGRESS.md` log with heading-per-iteration entries recording task completed, outcome, and codebase patterns learned.
 - Produce structured JSON on stdout at loop completion (matching `ralph.sh` contract) for downstream tooling.
+- Provide a `feature-work-on` skill that creates an implementation ticket, sets up a tmux session and git worktree, and launches `wiggum run`.
+- Provide a `feature-stop-work-on` skill that tears down the worktree, tmux session, and manages PR cleanup.
 
 ## Non-Goals
 
 - No hexagonal ports/adapters architecture (ticket explicitly defers this -- direct subprocess calls, refactor later).
-- No tmux session management or worktree creation (handled by companion `feature-work-on` skill, not this CLI).
 - No PRD generation pipeline (specs are consumed as input, not produced -- `propose-feature` and `create-feature-prd` skills handle creation).
-- No PR lifecycle automation (creating, updating, or merging PRs is out of scope for Phase 1).
+- No PR lifecycle automation within `wiggum run` itself (PR creation and updates are handled by `feature-stop-work-on`, not the loop CLI).
 - No parallel agent instances or concurrent iteration batching (single-threaded loop per invocation; parallelism deferred to Phase 5 roadmap).
 
 ## Orchestration Context
 
-`wiggum run` is the loop engine, not the entry point for feature work. Companion skills set up and tear down the environment:
+`wiggum run` is the loop engine. The companion skills set up and tear down the environment around it:
 
-**`feature-work-on` skill (future, not part of this ticket):**
+**`feature-work-on` skill:**
 - Accepts a proposal spec (issue number or file path).
 - Creates an implementation ticket (epic, story, or task depending on size) with a brief summary. This ticket registers an issue number used for branch names, PRs, and the implementation directory.
 - Creates a tmux session named `wiggum-<repo-name>-<feature-name>` with window 0 named `<ticket-num>`.
-- Creates a git worktree for the implementation branch.
+- Creates a git worktree for the implementation branch at `.wiggum/worktrees/<ticket-num>/`.
+- Creates `.wiggum/implementation/<ticket-num>/` in the worktree.
+- Launches `wiggum run <ticket-num>` in the tmux session.
 - The tmux/worktree structure supports future subdivision into subissues for epic-level work.
 
-**`feature-stop-work-on` skill (future, not part of this ticket):**
-- Cleans up worktree, tmux session, and creates/updates PR as needed.
+**`feature-stop-work-on` skill:**
+- Accepts a ticket number or derives it from the current worktree/branch.
+- Creates or updates a PR for the implementation branch, linking it to the implementation ticket.
+- Removes the git worktree at `.wiggum/worktrees/<ticket-num>/`.
+- Kills the tmux window (`<ticket-num>`) and cleans up the session if no windows remain.
+- Prunes the worktree reference from git (`git worktree prune`).
 
 `wiggum run` assumes it is invoked inside a prepared worktree where `.wiggum/implementation/<ticket-num>/` already exists (created by `feature-work-on` or manually). The CLI validates this directory exists at startup and exits with code 2 if missing.
 
@@ -102,7 +109,7 @@ This approach directly ports the proven `ralph.sh` loop to Python with three imp
                       cleanup: worktree, tmux, PR
 ```
 
-Data flow: Config is loaded once at startup. Specs directory is resolved from config (`specs_dir`) or defaults to `.wiggum/specs/` relative to the git root. Implementation artifacts (`IMPLEMENTATION_PLAN.md`, `PROGRESS.md`) live in `.wiggum/implementation/<ticket-num>/` and are version-controlled. The CLI validates the implementation directory exists at startup, then on each iteration constructs a prompt from template files + current file state, pipes it to `claude -p --dangerously-skip-permissions` via `Popen`, captures stdout, and updates `IMPLEMENTATION_PLAN.md` and `PROGRESS.md` as side effects. The build prompt also instructs claude to update `CLAUDE.md` files with reusable patterns.
+Data flow: Config is loaded once at startup. Specs are always read from `.wiggum/specs/` relative to the git root (hardcoded, not configurable). Implementation artifacts (`IMPLEMENTATION_PLAN.md`, `PROGRESS.md`) live in `.wiggum/implementation/<ticket-num>/` and are version-controlled. The CLI validates the implementation directory exists at startup, then on each iteration constructs a prompt from template files + current file state, pipes it to `claude -p --dangerously-skip-permissions` via `Popen`, captures stdout, and updates `IMPLEMENTATION_PLAN.md` and `PROGRESS.md` as side effects. The build prompt also instructs claude to update `CLAUDE.md` files with reusable patterns.
 
 ## Design Decisions
 
@@ -118,7 +125,7 @@ Data flow: Config is loaded once at startup. Specs directory is resolved from co
 
 6. **`--dangerously-skip-permissions` always passed.** `wiggum run` is inherently autonomous; users opt in to unattended execution by running the command itself. Adding a separate flag or config toggle would be redundant -- there is no meaningful use of `wiggum run` that involves interactive permission prompts.
 
-7. **Specs directory resolution via config with git root fallback.** The `specs_dir` field in `.wiggum/config.toml` can override the default. When unset, the CLI resolves `.wiggum/specs/` relative to the git root (found by walking up to `.git`). This handles monorepos and non-standard layouts while keeping the common case zero-config.
+7. **Specs directory hardcoded to `.wiggum/specs/` relative to git root.** The CLI always resolves specs from `.wiggum/specs/<issue-id>/` relative to the git root (found by walking up to `.git`). There is no config option to override this path. Making `specs_dir` configurable while leaving the implementation directory (``.wiggum/implementation/``) hardcoded would be inconsistent. Both directories follow the same `.wiggum/` convention; hardcoding both keeps the contract simple and predictable. The CLI creates `.wiggum/specs/` if it does not exist.
 
 8. **Build prompt instructs claude to update CLAUDE.md and PROGRESS.md with patterns.** No separate `AGENTS.md` file. The build prompt tells claude to append a patterns section to `PROGRESS.md` per iteration and update the project's `CLAUDE.md` files with reusable conventions and learnings. This matches the existing wiggum convention where `CLAUDE.md` is the living conventions file, avoiding a parallel file that would drift.
 
@@ -140,7 +147,15 @@ Data flow: Config is loaded once at startup. Specs directory is resolved from co
 
 17. **Implementation ticket number passed as a CLI argument.** `wiggum run <issue-id>` takes the implementation ticket number as a positional argument. The `feature-work-on` companion skill passes it when launching. This resolves `.wiggum/implementation/<issue-id>/` directly from the argument with no ambiguity. Deriving the ticket from the branch name would couple the CLI to a naming convention and break when branches are renamed or follow non-standard patterns. Reading from a file in `.wiggum/implementation/` would require a discovery step and introduce questions about which file, what format, and what happens when multiple implementation directories exist.
 
-18. **Plan completion signal uses a fenced JSON code block.** The plan prompt instructs claude to wrap its status output in a fenced JSON block (` ```json\n{"status": "complete"}\n``` `). The CLI extracts the last fenced JSON block from stdout by scanning for ` ```json ` / ` ``` ` delimiters and parses the JSON within. This is robust against JSON appearing in claude's reasoning text -- bare JSON lines could match incidental JSON in explanations or code examples, but fenced blocks with the ` ```json ` opening are unambiguous in practice. If no fenced JSON block is found, the iteration is treated as `in_progress` (graceful degradation).
+18. **Plan completion signal uses a fenced JSON code block.** The plan prompt instructs claude to wrap its status output in a fenced JSON block (` ```json\n{"status": "complete"}\n``` `). The CLI extracts the last fenced JSON block from stdout by scanning for ` ```json ` / ` ``` ` delimiters and parses the JSON within. If no fenced JSON block is found, the iteration is treated as `in_progress` (graceful degradation).
+
+19. **`feature-work-on` creates the implementation ticket, not the user.** The skill accepts a proposal spec reference and creates a lightweight implementation ticket (epic/story/task depending on estimated size) with a brief summary. The ticket exists purely to register an issue number that anchors the branch name, PR, and `.wiggum/implementation/<ticket-num>/` directory. This avoids a manual step between PRD approval and implementation start, and keeps the ticket creation conventions consistent via the `/wiggum:create-issue` skill.
+
+20. **`feature-work-on` tmux session naming: `wiggum-<repo-name>-<feature-name>`.** The session name includes the feature name (derived from the proposal title, kebab-cased) to distinguish multiple concurrent feature sessions within the same repo. Window 0 is named `<ticket-num>` for quick identification. This extends the existing `session-launch.sh` pattern (which uses `wiggum-<repo-name>`) by adding a feature suffix.
+
+21. **`feature-stop-work-on` creates/updates the PR before cleanup.** The skill ensures implementation work is preserved in a PR before removing the worktree. Creating the PR first means the branch is pushed and linked to the ticket. Worktree removal is safe because the branch still exists on the remote. If a PR already exists, the skill pushes any remaining commits and updates the PR body.
+
+22. **`feature-stop-work-on` derives context from the current worktree.** The skill can accept an explicit ticket number or derive it from the current worktree path (`.wiggum/worktrees/<ticket-num>/`) or branch name. This allows invocation from within the worktree without arguments, which is the common case.
 
 ## Config Schema
 
@@ -155,14 +170,10 @@ Data flow: Config is loaded once at startup. Specs directory is resolved from co
 | `[claude]` | | | |
 | `claude.model` | `str \| null` | `null` | Claude model to use (passed as `--model` flag). Null means use claude's default. |
 | `claude.flags` | `list[str]` | `[]` | Additional flags passed to every `claude -p` invocation. |
-| *(top-level)* | | | |
-| `specs_dir` | `str \| null` | `null` | Override for specs directory. Absolute path or relative to git root. Null means `.wiggum/specs/` relative to git root. |
 
 Example `.wiggum/config.toml`:
 
 ```toml
-specs_dir = ".wiggum/specs"
-
 [loop]
 max_plan_iterations = 5
 max_build_iterations = 25
@@ -184,7 +195,7 @@ The pydantic model validates types and ranges (e.g., `max_plan_iterations >= 1`)
 | Component | Change |
 |---|---|
 | `src/wiggum/cli.py` | Register `run_app` child App with `plan`, `build`, and default (combined) commands. Wire up parameter parsing for `issue_id`, `--max-iterations`, `--model`. Accept `--impl-dir` or derive implementation directory from ticket number. |
-| `src/wiggum/config.py` (new) | Pydantic `Config` model with nested `LoopConfig` and `ClaudeConfig` models. Fields: `specs_dir` (top-level), `loop.max_plan_iterations`, `loop.max_build_iterations`, `loop.quality_commands`, `claude.model`, `claude.flags`. `find_config()` upward walk. `load_config()` with tomllib + model_validate. |
+| `src/wiggum/config.py` (new) | Pydantic `Config` model with nested `LoopConfig` and `ClaudeConfig` models. Fields: `loop.max_plan_iterations`, `loop.max_build_iterations`, `loop.quality_commands`, `claude.model`, `claude.flags`. `find_config()` upward walk. `load_config()` with tomllib + model_validate. |
 | `src/wiggum/runner.py` (new) | Core loop logic: `run_plan()`, `run_build()`, `run_combined()`. Iteration loop, subprocess invocation, file updates. Plan mode extracts the last fenced JSON block from claude output to detect early completion. Validates `.wiggum/implementation/<ticket-num>/` exists at startup, creates skeleton plan/progress files if missing. |
 | `src/wiggum/templates/plan.md` (new) | Plan mode prompt template using `string.Template` `$variable` placeholders. Numbered-step structure from ralph loop guide. Includes instruction for claude to output a fenced JSON code block (` ```json\n{"status": "complete"}\n``` ` or ` ```json\n{"status": "in_progress"}\n``` `) at end of response. Loaded via `importlib.resources`. |
 | `src/wiggum/templates/build.md` (new) | Build mode prompt template using `string.Template` `$variable` placeholders. Includes quality command injection point, `/commit` skill instruction, CLAUDE.md/PROGRESS.md update instructions. |
@@ -196,7 +207,13 @@ The pydantic model validates types and ranges (e.g., `max_plan_iterations >= 1`)
 | `src/wiggum/progress.py` (new) | `PROGRESS.md` writer: append heading-per-iteration entry with `## Iteration N (YYYY-MM-DDTHH:MM:SS)` format, bullet points for task, outcome, and patterns. File path resolved from `.wiggum/implementation/<ticket-num>/`. |
 | `src/wiggum/impl_dir.py` (new) | Utilities for `.wiggum/implementation/<ticket-num>/` directory: validate existence, create skeleton `IMPLEMENTATION_PLAN.md` and `PROGRESS.md` files if missing, resolve file paths within the directory. |
 | `src/wiggum/json_extract.py` (new) | `extract_last_fenced_json(stdout: str) -> dict | None` function that scans for the last ` ```json ` ... ` ``` ` block in stdout and parses the content as JSON. Returns `None` if no fenced JSON block is found. |
-| `tests/test_config.py` (new) | Config loading, discovery, defaults, validation errors, `specs_dir` resolution, nested TOML section parsing. |
+| `plugins/wiggum/skills/feature-work-on/SKILL.md` (new) | Skill definition for `feature-work-on`. Accepts a proposal spec (issue number or file path). Creates implementation ticket via `/wiggum:create-issue`, creates tmux session and git worktree via `session-launch.sh`, creates `.wiggum/implementation/<ticket-num>/` directory, and launches `wiggum run`. |
+| `plugins/wiggum/skills/feature-work-on/scripts/` (new) | Symlinks to shared scripts (`session-launch.sh`, `fetch-issue.sh`) and any skill-specific scripts for implementation ticket creation and directory setup. |
+| `plugins/wiggum/skills/feature-stop-work-on/SKILL.md` (new) | Skill definition for `feature-stop-work-on`. Accepts optional ticket number (derives from worktree if omitted). Pushes commits, creates/updates PR via `/wiggum:create-pr`, removes worktree, kills tmux window, prunes worktree reference. |
+| `plugins/wiggum/skills/feature-stop-work-on/scripts/` (new) | Symlinks to shared scripts and any skill-specific scripts for worktree removal, tmux cleanup, and PR management. |
+| `plugins/wiggum/scripts/worktree-remove.sh` (new) | Shared script to remove a git worktree and prune the reference. Accepts `--worktree-path` and `--repo-path`. Idempotent. |
+| `plugins/wiggum/scripts/tmux-kill-window.sh` (new) | Shared script to kill a tmux window by name within a session. Kills the session if no windows remain. Accepts `--session` and `--window`. Idempotent. |
+| `tests/test_config.py` (new) | Config loading, discovery, defaults, validation errors, nested TOML section parsing. |
 | `tests/test_runner.py` (new) | Loop iteration logic, mode transitions, early exit on plan completion signal. |
 | `tests/test_plan.py` (new) | Plan file parsing, task selection, mark/reset operations. |
 | `tests/test_interrupt.py` (new) | SIGINT handler behavior, mark reset on interrupt. |
@@ -207,7 +224,9 @@ The pydantic model validates types and ranges (e.g., `max_plan_iterations >= 1`)
 
 ## Acceptance Tests
 
-- [ ] Given no `.wiggum/config.toml` exists, when `wiggum run plan 10` is invoked, then the CLI starts with default config values (max_plan_iterations=5, empty quality_commands, specs resolved from git root) and does not error on missing config.
+### `wiggum run` CLI
+
+- [ ] Given no `.wiggum/config.toml` exists, when `wiggum run plan 10` is invoked, then the CLI starts with default config values (max_plan_iterations=5, empty quality_commands, specs resolved from `.wiggum/specs/` at git root) and does not error on missing config.
 - [ ] Given `.wiggum/specs/10/` contains markdown spec files, when `wiggum run plan 10` is invoked, then a fresh `claude -p --dangerously-skip-permissions` process is spawned with a plan prompt that includes the spec file contents.
 - [ ] Given plan mode is running and claude outputs a fenced JSON block ` ```json\n{"status": "in_progress"}\n``` ` on each iteration, when the loop executes, then exactly `max_plan_iterations` iterations run (default 5), each spawning a separate claude process.
 - [ ] Given plan mode is running and claude outputs a fenced JSON block ` ```json\n{"status": "complete"}\n``` ` on iteration 2, when the CLI extracts the last fenced JSON block from stdout, then the plan loop exits after iteration 2 without running remaining iterations.
@@ -227,26 +246,49 @@ The pydantic model validates types and ranges (e.g., `max_plan_iterations >= 1`)
 - [ ] Given a `.wiggum/config.toml` exists with `[claude]` containing `model = "opus"` and `[loop]` containing `max_build_iterations = 20`, when `wiggum run build 10` is invoked, then the claude subprocess is called with the `--model opus` flag and the loop allows up to 20 iterations.
 - [ ] Given `wiggum run build 10 --max-iterations 5` is invoked and config has `max_build_iterations = 20`, when the loop starts, then the CLI override (5) takes precedence over the config file value (20).
 - [ ] Given `IMPLEMENTATION_PLAN.md` does not exist in `.wiggum/implementation/<ticket-num>/`, when `wiggum run build 10` is invoked, then the CLI exits with code 2 and prints an error message indicating no implementation plan found.
-- [ ] Given `.wiggum/config.toml` contains `specs_dir = "custom/specs"`, when `wiggum run plan 10` is invoked, then specs are read from `custom/specs/10/` relative to the git root instead of `.wiggum/specs/10/`.
 - [ ] Given prompt templates exist at `src/wiggum/templates/plan.md` and `src/wiggum/templates/build.md`, when the CLI loads them via `importlib.resources`, then the full template content is returned without filesystem path assumptions.
 - [ ] Given a plan template contains `$specs_content` and `$issue_id` placeholders, when `render_plan_prompt()` is called with those values, then `string.Template.safe_substitute()` replaces the placeholders and leaves any unrecognized `$` references intact.
 - [ ] Given a build template contains `$quality_section` and quality commands are empty, when `render_build_prompt()` is called, then the quality section variable is substituted with an empty string and no quality instructions appear in the rendered prompt.
 - [ ] Given `.wiggum/implementation/<ticket-num>/` does not exist, when `wiggum run plan 10` is invoked, then the CLI exits with code 2 and prints an error message indicating the implementation directory is missing.
 - [ ] Given `.wiggum/implementation/<ticket-num>/` exists but contains no files, when `wiggum run plan 10` is invoked, then the CLI creates skeleton `IMPLEMENTATION_PLAN.md` and `PROGRESS.md` files in the directory before starting the plan loop.
 
+### `feature-work-on` skill
+
+- [ ] Given a proposal ticket #10 exists with an approved PRD, when `/wiggum:feature-work-on 10` is invoked, then the skill creates an implementation ticket via `/wiggum:create-issue` with a brief summary referencing the proposal.
+- [ ] Given the implementation ticket #42 is created, when the skill sets up the environment, then a git worktree is created at `.wiggum/worktrees/42/` branching from the default branch.
+- [ ] Given the worktree is created, when the skill creates the tmux session, then the session is named `wiggum-<repo-name>-<feature-name>` with window 0 named `42`.
+- [ ] Given the tmux session and worktree exist, when the skill prepares the implementation directory, then `.wiggum/implementation/42/` is created inside the worktree.
+- [ ] Given the environment is fully prepared, when the skill launches the loop, then `wiggum run 42` is executed inside the tmux session within the worktree.
+- [ ] Given a proposal spec file path is provided instead of an issue number (e.g., `.wiggum/specs/10/wiggum-run.md`), when `/wiggum:feature-work-on .wiggum/specs/10/wiggum-run.md` is invoked, then the skill reads the spec file to derive the proposal context and proceeds with ticket creation.
+- [ ] Given a worktree already exists at `.wiggum/worktrees/42/`, when `/wiggum:feature-work-on` attempts to create it, then the skill reuses the existing worktree and tmux window without error (idempotent).
+- [ ] Given the implementation ticket is created, when the skill determines the issue type, then epic/story/task is chosen based on estimated size (epic for multi-issue work, story for single feature, task for small changes).
+
+### `feature-stop-work-on` skill
+
+- [ ] Given an implementation is in progress with ticket #42, when `/wiggum:feature-stop-work-on 42` is invoked, then uncommitted changes are handled and a PR is created or updated via `/wiggum:create-pr` linking to ticket #42.
+- [ ] Given the PR is created/updated, when the skill cleans up the worktree, then `.wiggum/worktrees/42/` is removed and `git worktree prune` is run.
+- [ ] Given the tmux session `wiggum-<repo-name>-<feature-name>` has window `42`, when the skill cleans up tmux, then the window is killed and the session is removed if no other windows remain.
+- [ ] Given no explicit ticket number is provided, when `/wiggum:feature-stop-work-on` is invoked from within a worktree at `.wiggum/worktrees/42/`, then the skill derives ticket number 42 from the worktree path.
+- [ ] Given the worktree has already been removed, when `/wiggum:feature-stop-work-on 42` is invoked, then the skill skips worktree removal and proceeds with tmux cleanup and PR management (idempotent).
+- [ ] Given a PR already exists for the implementation branch, when the skill runs, then it pushes any remaining commits and updates the existing PR body instead of creating a new one.
+
 ## Implementation Sketch
 
-**Phase 1: Config and CLI skeleton.** Add the pydantic `Config` model with nested `LoopConfig` (`max_plan_iterations`, `max_build_iterations`, `quality_commands`) and `ClaudeConfig` (`model`, `flags`) models, plus top-level `specs_dir`. Implement `find_config()` discovery via upward walk and `load_config()` with tomllib + model_validate. Register the `run` sub-app on the existing cyclopts root app with `plan`, `build`, and default commands. Tests for config loading, discovery, defaults, nested section parsing, and `specs_dir` resolution.
+**Phase 1: Config and CLI skeleton.** Add the pydantic `Config` model with nested `LoopConfig` (`max_plan_iterations`, `max_build_iterations`, `quality_commands`) and `ClaudeConfig` (`model`, `flags`) models. Implement `find_config()` discovery via upward walk and `load_config()` with tomllib + model_validate. Register the `run` sub-app on the existing cyclopts root app with `plan`, `build`, and default commands. Tests for config loading, discovery, defaults, and nested section parsing.
 
 **Phase 2: Implementation directory and file infrastructure.** Create `impl_dir.py` with utilities for `.wiggum/implementation/<ticket-num>/` directory validation, skeleton file creation, and path resolution. The skeleton `IMPLEMENTATION_PLAN.md` contains a title and empty checkbox section; the skeleton `PROGRESS.md` contains a title. Tests for directory validation and skeleton creation.
 
 **Phase 3: Templates, subprocess, and prompt infrastructure.** Create `src/wiggum/templates/` with `plan.md` and `build.md` template files drafted from the ralph loop guide's numbered-step structure, using `$variable` placeholders for `string.Template` substitution. The plan template includes instructions for claude to output a fenced JSON code block at the end of each response. Implement `importlib.resources`-based template loader returning `string.Template` instances. Implement `invoke_claude()` using `Popen` with stdin prompt piping, stdout capture, stderr passthrough, and `--dangerously-skip-permissions` always set. Implement `extract_last_fenced_json()` for parsing the last fenced JSON block from stdout. Write `render_plan_prompt()` and `render_build_prompt()` that load templates, assemble optional sections (quality commands, `/commit` skill instruction) as Python strings, and pass them to `safe_substitute()`. Tests for template loading, prompt rendering, fenced JSON extraction, and subprocess invocation (mocked).
 
-**Phase 4: Plan mode loop with early exit.** Implement `run_plan()`: resolve specs directory from config, validate implementation directory, read specs from `<specs_dir>/<issue-id>/`, render plan prompt, invoke claude, extract last fenced JSON block from stdout, exit early on completion signal or continue to next iteration. Repeat for up to `max_plan_iterations`. Tests for plan loop logic with mocked subprocess, including early exit and graceful degradation on missing fenced JSON block.
+**Phase 4: Plan mode loop with early exit.** Implement `run_plan()`: resolve specs from `.wiggum/specs/<issue-id>/` at git root, validate implementation directory, read specs, render plan prompt, invoke claude, extract last fenced JSON block from stdout, exit early on completion signal or continue to next iteration. Repeat for up to `max_plan_iterations`. Tests for plan loop logic with mocked subprocess, including early exit and graceful degradation on missing fenced JSON block.
 
 **Phase 5: Build mode loop.** Implement `IMPLEMENTATION_PLAN.md` parser (read checkboxes, find top unchecked task, mark complete). Implement `run_build()`: read plan, select task, render build prompt (with quality commands from config, `/commit` skill instruction, and instructions to update CLAUDE.md/PROGRESS.md patterns), invoke claude, update plan, append heading-per-iteration entry to `PROGRESS.md`, repeat. Tests for plan parsing, task selection, and build loop logic.
 
 **Phase 6: SIGINT handling and combined mode.** Register SIGINT handler before loop entry. Implement mark-reset logic (track which `[x]` marks were added in the current iteration, revert on interrupt). Implement `run_combined()` that chains plan then build. Wire exit codes (0, 1, 2, 130). Integration tests for interrupt behavior and combined mode sequencing.
+
+**Phase 7: `feature-work-on` skill.** Create the skill directory at `plugins/wiggum/skills/feature-work-on/` with `SKILL.md` and `scripts/` subdirectory. The skill accepts a proposal spec reference, creates an implementation ticket via `/wiggum:create-issue`, calls `session-launch.sh` to set up the worktree and tmux session, creates the `.wiggum/implementation/<ticket-num>/` directory, and sends `wiggum run <ticket-num>` to the tmux session. Symlink shared scripts (`session-launch.sh`, `fetch-issue.sh`) into the skill's `scripts/` directory.
+
+**Phase 8: `feature-stop-work-on` skill.** Create the skill directory at `plugins/wiggum/skills/feature-stop-work-on/` with `SKILL.md` and `scripts/` subdirectory. The skill derives the ticket number from the argument or current worktree, creates/updates a PR via `/wiggum:create-pr`, removes the worktree via `worktree-remove.sh`, kills the tmux window via `tmux-kill-window.sh`, and prunes the worktree reference. Add the shared `worktree-remove.sh` and `tmux-kill-window.sh` scripts to `plugins/wiggum/scripts/`.
 
 ## Alternatives Considered
 
@@ -274,7 +316,12 @@ The pydantic model validates types and ranges (e.g., `max_plan_iterations >= 1`)
 | Ticket number derived from branch name | Couples the CLI to a branch naming convention that may vary across projects or change over time. Branches can be renamed, and non-standard branch names would require special-case parsing. An explicit CLI argument is unambiguous and works regardless of branch naming patterns. |
 | Ticket number read from a file in `.wiggum/implementation/` | Requires a discovery step (which file? what format?) and introduces ambiguity when multiple implementation directories exist. An explicit CLI argument avoids the indirection. |
 | Bare JSON line for plan completion signal | A bare JSON line at the end of stdout is fragile -- claude may include JSON snippets in reasoning text, code examples, or error messages that could be mistaken for the completion signal. Fenced JSON blocks (` ```json `) are structurally distinct from incidental JSON in prose. |
+| Configurable `specs_dir` in config | Making specs directory configurable while hardcoding the implementation directory (`.wiggum/implementation/`) creates an inconsistency. Both follow the `.wiggum/` convention. Hardcoding both keeps the contract simple and avoids partial configurability. |
+| `feature-work-on` as a separate ticket | The skill is the entry point that creates the environment `wiggum run` depends on. Shipping the CLI without the skill that sets up its preconditions would require users to manually create tickets, worktrees, tmux sessions, and directories -- negating the automation value. |
+| `feature-stop-work-on` as a separate ticket | Same reasoning as `feature-work-on`. The teardown skill completes the lifecycle. Without it, users must manually clean up worktrees and tmux sessions, and PR creation is disconnected from the loop workflow. |
 
 ## Open Questions
 
-(None -- all previously open questions have been resolved as design decisions.)
+- What size heuristic should `feature-work-on` use to classify the implementation ticket as epic vs. story vs. task? The PRD spec could include an explicit size indicator, or the skill could default to "story" and let the user override.
+- Should `feature-stop-work-on` commit uncommitted changes before creating the PR, or refuse to proceed if the working tree is dirty? Committing automatically risks including unfinished work; refusing requires the user to clean up manually.
+- The `session-launch.sh` script currently uses `wiggum-<repo-name>` as the session name (without feature suffix). Should `feature-work-on` extend `session-launch.sh` to accept a `--session-name` override, or should a new script handle the modified naming convention?
