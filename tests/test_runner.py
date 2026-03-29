@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 import pytest
 
 from wiggum.config import Config, LoopConfig, ModelConfig
-from wiggum.runner import resolve_specs, run_build, run_plan
+from wiggum.runner import resolve_specs, run_build, run_combined, run_plan
 from wiggum.subprocess_util import InvokeResult
 
 
@@ -372,6 +372,120 @@ class TestRunBuild:
         cfg = Config(loop=LoopConfig(max_build_iterations=10))
 
         run_build("42", config=cfg, root=root)
+
+        summary = json.loads(capsys.readouterr().out)
+        assert summary == {
+            "issue_id": "42",
+            "completed_tasks": 2,
+            "total_tasks": 2,
+            "all_complete": True,
+            "exit_code": 0,
+        }
+
+
+def _setup_combined_repo(
+    tmp_path: Path,
+    issue_id: str = "42",
+    plan_content: str = _PLAN_TWO_TASKS,
+) -> Path:
+    """Create a repo with specs, impl dir, plan, and progress files for combined tests."""
+    root = _setup_repo(tmp_path, issue_id)
+    impl = root / ".wiggum" / "implementation" / issue_id
+    (impl / "IMPLEMENTATION_PLAN.md").write_text(plan_content)
+    (impl / "PROGRESS.md").write_text("# Progress\n\n")
+    return root
+
+
+class TestRunCombined:
+    @patch("wiggum.runner.invoke_claude")
+    def test_chains_plan_then_build(
+        self,
+        mock_invoke: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = _setup_combined_repo(tmp_path)
+        mock_invoke.side_effect = [
+            InvokeResult(stdout='```json\n{"status": "complete"}\n```', exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+        ]
+        cfg = Config(loop=LoopConfig(max_plan_iterations=5, max_build_iterations=10))
+
+        code = run_combined("42", config=cfg, root=root)
+
+        assert code == 0
+        assert mock_invoke.call_count == 3
+        summary = json.loads(capsys.readouterr().out)
+        assert summary["all_complete"] is True
+        assert summary["completed_tasks"] == 2
+
+    @patch("wiggum.runner.invoke_claude")
+    def test_plan_max_iterations_still_runs_build(
+        self,
+        mock_invoke: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = _setup_combined_repo(tmp_path)
+        mock_invoke.side_effect = [
+            InvokeResult(stdout='```json\n{"status": "in_progress"}\n```', exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+        ]
+        cfg = Config(loop=LoopConfig(max_plan_iterations=1, max_build_iterations=10))
+
+        code = run_combined("42", config=cfg, root=root)
+
+        assert code == 0
+        summary = json.loads(capsys.readouterr().out)
+        assert summary["all_complete"] is True
+
+    @patch("wiggum.runner.invoke_claude")
+    def test_returns_build_exit_code_on_max_iterations(
+        self,
+        mock_invoke: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = _setup_combined_repo(tmp_path)
+        mock_invoke.side_effect = [
+            InvokeResult(stdout='```json\n{"status": "complete"}\n```', exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+        ]
+        cfg = Config(loop=LoopConfig(max_plan_iterations=5, max_build_iterations=1))
+
+        code = run_combined("42", config=cfg, root=root)
+
+        assert code == 1
+        summary = json.loads(capsys.readouterr().out)
+        assert summary["all_complete"] is False
+        assert summary["completed_tasks"] == 1
+
+    def test_exits_on_startup_failure(self, tmp_path: Path):
+        (tmp_path / ".git").mkdir()
+        cfg = Config()
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_combined("999", config=cfg, root=tmp_path)
+        assert exc_info.value.code == 2
+
+    @patch("wiggum.runner.invoke_claude")
+    def test_json_summary_structure(
+        self,
+        mock_invoke: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        root = _setup_combined_repo(tmp_path)
+        mock_invoke.side_effect = [
+            InvokeResult(stdout='```json\n{"status": "complete"}\n```', exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+            InvokeResult(stdout="done", exit_code=0),
+        ]
+        cfg = Config(loop=LoopConfig(max_plan_iterations=5, max_build_iterations=10))
+
+        run_combined("42", config=cfg, root=root)
 
         summary = json.loads(capsys.readouterr().out)
         assert summary == {

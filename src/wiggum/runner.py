@@ -163,3 +163,18 @@ def run_build(
         )
 
     return exit_code
+
+
+def run_combined(
+    issue_id: str,
+    *,
+    config: Config,
+    root: Path | None = None,
+) -> int:
+    """Run plan mode followed by build mode without user confirmation.
+
+    Returns 0 when all tasks complete, 1 if max iterations reached.
+    Exits with code 2 on startup failures, 130 on SIGINT.
+    """
+    run_plan(issue_id, config=config, root=root)
+    return run_build(issue_id, config=config, root=root)
