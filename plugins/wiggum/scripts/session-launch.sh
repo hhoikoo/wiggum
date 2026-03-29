@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create a git worktree, launch a Claude session in a tmux window, and send an initial command.
+# Create a git worktree, open a tmux window, optionally launch Claude, and send an initial command.
 # Dependencies: tmux, git, claude, jq
-# Usage: session-launch.sh --ticket-id <ID> --repo-path <PATH> [--base-branch <BRANCH>] [--command <CMD>] [--session-name <NAME>] [--window-name <NAME>]
+# Usage: session-launch.sh --ticket-id <ID> --repo-path <PATH> [--base-branch <BRANCH>] [--branch-name <NAME>] [--command <CMD>] [--session-name <NAME>] [--window-name <NAME>] [--no-claude]
 # Stdout: tmux target (session:window)
 
 script_dir="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
@@ -16,6 +16,8 @@ base_branch="main"
 launch_command=""
 custom_session_name=""
 custom_window_name=""
+custom_branch_name=""
+skip_claude=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,6 +45,14 @@ while [[ $# -gt 0 ]]; do
       custom_window_name="${2:?--window-name requires a value}"
       shift 2
       ;;
+    --branch-name)
+      custom_branch_name="${2:?--branch-name requires a value}"
+      shift 2
+      ;;
+    --no-claude)
+      skip_claude=true
+      shift
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
@@ -59,7 +69,7 @@ repo_name="$(basename "$repo_path")"
 session_name="${custom_session_name:-wiggum-${repo_name}}"
 window_name="${custom_window_name:-${ticket_id}}"
 worktree_path="${repo_path}/.wiggum/worktrees/${ticket_id}"
-branch_name="doc/prd-${ticket_id}"
+branch_name="${custom_branch_name:-doc/prd-${ticket_id}}"
 
 # --- Worktree creation ---
 
@@ -108,31 +118,36 @@ fi
 
 target="${session_name}:${window_name}"
 
-# --- Claude launch ---
+# --- Launch ---
 
-"$tmux_send" "$target" "claude --dangerously-skip-permissions"
-
-# Wait for the Claude process to appear
-deadline=$(( $(date +%s) + 30 ))
-while true; do
-  if pgrep -x claude >/dev/null 2>&1; then break; fi
-  if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "session-launch.sh: timed out waiting for claude process" >&2
-    exit 1
+if [ "$skip_claude" = true ]; then
+  # Shell-only mode: send command directly without starting Claude
+  if [ -n "$launch_command" ]; then
+    "$tmux_send" "$target" "$launch_command"
   fi
-  sleep 0.5
-done
+else
+  "$tmux_send" "$target" "claude --dangerously-skip-permissions"
 
-# Wait for Claude TUI prompt
-sleep 5
-"$tmux_wait" "$target" "❯" 30
+  # Wait for the Claude process to appear
+  deadline=$(( $(date +%s) + 30 ))
+  while true; do
+    if pgrep -x claude >/dev/null 2>&1; then break; fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "session-launch.sh: timed out waiting for claude process" >&2
+      exit 1
+    fi
+    sleep 0.5
+  done
 
-# --- Send initial command ---
+  # Wait for Claude TUI prompt
+  sleep 5
+  "$tmux_wait" "$target" "❯" 30
 
-if [ -n "$launch_command" ]; then
-  tmux send-keys -l -t "$target" "$launch_command"
-  sleep 1
-  tmux send-keys -t "$target" Enter
+  if [ -n "$launch_command" ]; then
+    tmux send-keys -l -t "$target" "$launch_command"
+    sleep 1
+    tmux send-keys -t "$target" Enter
+  fi
 fi
 
 echo "$target"
