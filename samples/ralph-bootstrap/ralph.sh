@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 ISSUE_ID="${1:?Usage: ralph.sh <issue-id> [max_iterations]}"
-MAX_ITERATIONS="${2:-10}"
+MAX_ITERATIONS="${2:-50}"
 
 PRD_FILE="$SCRIPT_DIR/prd.json"
 PROGRESS_FILE="$SCRIPT_DIR/progress.md"
