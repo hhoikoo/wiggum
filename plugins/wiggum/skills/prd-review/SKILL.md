@@ -1,5 +1,5 @@
 ---
-name: review-feature-prd
+name: prd-review
 description: Handle review comments on a PRD PR. Triages feedback, updates the PRD document, replies to threads, and pushes updates. Invoke manually when review comments arrive.
 argument-hint: "<ticket-id>"
 ---
