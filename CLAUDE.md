@@ -43,7 +43,8 @@ plugins/wiggum/              # wiggum Claude Code plugin (marketplace)
   hooks/                     # hook configuration and hook scripts
 bin/                         # convenience symlinks (claude-dev)
 .claude-plugin/              # marketplace manifest
-.wiggum/                     # runtime artifacts (specs, research)
+.wiggum/                     # runtime artifacts (specs, research, config)
+  config.toml                # loop limits, model, quality commands
 ```
 
 ## Plugin Development
@@ -53,7 +54,7 @@ bin/                         # convenience symlinks (claude-dev)
 ./bin/claude-dev --resume                  # resume a previous session
 ```
 
-Plugin skills are namespaced: `/wiggum:feature-propose`, `/wiggum:prd-create`, `/wiggum:prd-review`, `/wiggum:prd-close`.
+Plugin skills are namespaced: `/wiggum:feature-propose`, `/wiggum:prd-create`, `/wiggum:prd-review`, `/wiggum:prd-close`, `/wiggum:feature-work-on`, `/wiggum:feature-stop-work-on`.
 
 ## Verify Before Assuming
 

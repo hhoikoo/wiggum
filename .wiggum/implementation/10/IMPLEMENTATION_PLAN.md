@@ -1,0 +1,8 @@
+# Implementation Plan
+
+## Tasks
+
+- [x] Wire SIGINT handler into `invoke_claude()`: import `set_active_process` from `wiggum.interrupt` in `subprocess_util.py`, call `set_active_process(proc)` before `proc.communicate()` and `set_active_process(None)` in a `finally` block after. Add tests in `test_subprocess_util.py` that verify the active process is set during invocation and cleared after (both on success and on exception). Pyright, ruff, and pytest pass.
+- [x] Wire SIGINT handler into runner loops: import `register_handler` and `set_active_plan` from `wiggum.interrupt` in `runner.py`. Call `register_handler()` at the start of `run_plan()`, `run_build()`, and `run_combined()`. In `run_build()`, call `set_active_plan(state)` before each `invoke_claude()` call and `set_active_plan(None)` after. Update tests in `test_runner.py` to verify `register_handler` is called and `set_active_plan` is set/cleared around subprocess invocations. Pyright, ruff, and pytest pass.
+- [x] Create `scripts/` directory with symlinks for `feature-work-on` skill: create `plugins/wiggum/skills/feature-work-on/scripts/` and add relative symlinks for `fetch-issue.sh`, `session-launch.sh`, and `tmux-send.sh` pointing to `../../../scripts/<name>.sh`. Verify each symlink resolves to the correct shared script.
+- [x] Create `scripts/` directory with symlinks for `feature-stop-work-on` skill: create `plugins/wiggum/skills/feature-stop-work-on/scripts/` and add relative symlinks for `worktree-remove.sh` and `tmux-kill-window.sh` pointing to `../../../scripts/<name>.sh`. Verify each symlink resolves to the correct shared script.
